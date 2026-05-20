@@ -132,40 +132,37 @@ st.markdown("""
     .bearish { color: #ef4444; }
     .neutral { color: #f59e0b; }
 
-    /* Watermark - always visible */
+    /* Watermark - transparent, top left, doesn't block navigation */
     .watermark {
         position: fixed !important;
-        top: 70px !important;
-        left: 25px !important;
+        top: 15px !important;
+        left: 350px !important;
         z-index: 999999 !important;
-        background: linear-gradient(135deg, #1a1f2e 0%, #0e1117 100%);
-        border: 2px solid #3b82f6;
-        border-radius: 10px;
-        padding: 15px 25px;
-        box-shadow: 0 4px 25px rgba(59, 130, 246, 0.4);
+        background: transparent !important;
+        border: none;
+        padding: 10px 20px;
+        pointer-events: none;
     }
     .watermark-subtitle {
         margin: 0;
-        font-size: 10px;
-        color: #6b7280;
+        font-size: 12px;
+        color: rgba(156, 163, 175, 0.5);
         text-transform: uppercase;
         letter-spacing: 2px;
+        font-weight: 500;
     }
     .watermark-name {
-        margin: 2px 0;
-        font-size: 20px;
-        font-weight: 700;
-        background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
+        margin: 3px 0;
+        font-size: 28px;
+        font-weight: 800;
+        color: rgba(59, 130, 246, 0.4);
     }
     .watermark-title {
         margin: 0;
-        font-size: 16px;
-        color: #f59e0b;
-        font-weight: 700;
-        letter-spacing: 2px;
+        font-size: 20px;
+        color: rgba(245, 158, 11, 0.4);
+        font-weight: 800;
+        letter-spacing: 3px;
     }
 </style>
 """, unsafe_allow_html=True)
