@@ -61,9 +61,9 @@ FINANCE_STOCKS = [
 ENERGY_STOCKS = [
     # Oil Majors
     "XOM", "CVX", "COP", "EOG", "OXY", "MPC", "VLO", "PSX",
-    "DVN", "FANG", "APA", "HAL", "SLB", "BKR", "MRO", "TPL",
+    "DVN", "FANG", "APA", "HAL", "SLB", "BKR", "OVV", "TPL",
     # Natural Gas
-    "LNG", "EQT", "AR", "RRC", "CTRA",
+    "LNG", "EQT", "AR", "RRC", "CHRD",
     # Renewables
     "NEE", "ENPH", "SEDG", "FSLR", "RUN", "PLUG", "BE",
     # Utilities
@@ -146,9 +146,9 @@ CRYPTO_SYMBOLS = [
     "DOGE-USD", "DOT-USD", "SHIB-USD", "TRX-USD", "AVAX-USD",
     "LINK-USD", "ATOM-USD", "LTC-USD", "ETC-USD", "XLM-USD",
     "BCH-USD", "FIL-USD", "NEAR-USD", "ARB-USD", "OP-USD",
-    "AAVE-USD", "MKR-USD", "LDO-USD", "CRV-USD", "POL-USD",
+    "AAVE-USD", "MKR-USD", "LDO-USD", "CRV-USD", "HBAR-USD",
     "ALGO-USD", "SAND-USD", "MANA-USD", "AXS-USD", "GALA-USD", "ENJ-USD",
-    "INJ-USD", "SEI-USD", "SUI-USD", "PEPE-USD", "WIF-USD",
+    "INJ-USD", "SEI-USD", "RENDER-USD", "ICP-USD", "WIF-USD", "VET-USD",
 ]
 
 # ===== FOREX =====
