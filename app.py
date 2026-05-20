@@ -136,7 +136,7 @@ st.markdown("""
     .watermark {
         position: fixed !important;
         top: 40px !important;
-        left: 320px !important;
+        left: 260px !important;
         z-index: 999999 !important;
         background: transparent !important;
         border: none;
@@ -145,24 +145,24 @@ st.markdown("""
     }
     .watermark-subtitle {
         margin: 0;
-        font-size: 24px;
-        color: rgba(156, 163, 175, 0.7);
+        font-size: 28px;
+        color: rgba(156, 163, 175, 0.85);
         text-transform: uppercase;
-        letter-spacing: 5px;
-        font-weight: 600;
+        letter-spacing: 6px;
+        font-weight: 700;
     }
     .watermark-name {
         margin: 10px 0;
-        font-size: 64px;
+        font-size: 72px;
         font-weight: 900;
-        color: rgba(59, 130, 246, 0.55);
+        color: rgba(59, 130, 246, 0.7);
     }
     .watermark-title {
         margin: 0;
-        font-size: 52px;
-        color: rgba(245, 158, 11, 0.55);
+        font-size: 58px;
+        color: rgba(245, 158, 11, 0.7);
         font-weight: 900;
-        letter-spacing: 8px;
+        letter-spacing: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
