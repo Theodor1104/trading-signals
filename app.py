@@ -592,6 +592,25 @@ def scan_industry(stocks, progress_cb=None):
 
 # ===== UI =====
 
+# Watermark - always visible top left
+st.markdown("""
+<div style="position: fixed; top: 60px; left: 20px; z-index: 9999; pointer-events: none;">
+    <div style="background: linear-gradient(135deg, #1a1f2e 0%, #0e1117 100%);
+                border: 2px solid #3b82f6;
+                border-radius: 8px;
+                padding: 12px 20px;
+                box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);">
+        <p style="margin: 0; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 2px;">Created by</p>
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700;
+                   background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+                   -webkit-background-clip: text;
+                   -webkit-text-fill-color: transparent;
+                   background-clip: text;">Theodor Hauch's</h3>
+        <p style="margin: 0; font-size: 14px; color: #f59e0b; font-weight: 600; letter-spacing: 1px;">AKTIE MAGI</p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
 # Header
 st.markdown("""
 <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #2d3748; margin-bottom: 20px;">
