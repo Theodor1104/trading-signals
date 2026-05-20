@@ -132,11 +132,11 @@ st.markdown("""
     .bearish { color: #ef4444; }
     .neutral { color: #f59e0b; }
 
-    /* Watermark - large, transparent, top left */
+    /* Watermark - large, transparent, top */
     .watermark {
         position: fixed !important;
-        top: 12px !important;
-        left: 20px !important;
+        top: 15px !important;
+        left: 400px !important;
         z-index: 999999 !important;
         background: transparent !important;
         border: none;
@@ -145,24 +145,24 @@ st.markdown("""
     }
     .watermark-subtitle {
         margin: 0;
-        font-size: 16px;
+        font-size: 20px;
         color: rgba(156, 163, 175, 0.6);
         text-transform: uppercase;
-        letter-spacing: 3px;
+        letter-spacing: 4px;
         font-weight: 600;
     }
     .watermark-name {
-        margin: 5px 0;
-        font-size: 42px;
+        margin: 8px 0;
+        font-size: 56px;
         font-weight: 900;
         color: rgba(59, 130, 246, 0.5);
     }
     .watermark-title {
         margin: 0;
-        font-size: 32px;
+        font-size: 44px;
         color: rgba(245, 158, 11, 0.5);
         font-weight: 900;
-        letter-spacing: 5px;
+        letter-spacing: 6px;
     }
 </style>
 """, unsafe_allow_html=True)
