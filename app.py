@@ -1,6 +1,5 @@
 """
-Trading Signals Pro - Advanced Multi-Source Analysis Platform
-Ultra-secure signals with multi-timeframe confluence analysis
+Trading Signals Pro - Professional Multi-Source Analysis Platform
 """
 import streamlit as st
 import pandas as pd
@@ -22,49 +21,150 @@ try:
 except ImportError:
     TRADINGVIEW_AVAILABLE = False
 
-# Import config
 from config import (
     INDUSTRIES, ALL_STOCKS, CRYPTO_SYMBOLS, FOREX_PAIRS,
     NEWS_RSS_FEEDS, API_ENDPOINTS, REFRESH_INTERVAL
 )
 
+# Page config
 st.set_page_config(
     page_title="Trading Signals Pro",
-    page_icon="📈",
+    page_icon="chart_with_upwards_trend",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
+# Professional CSS styling
+st.markdown("""
+<style>
+    /* Main theme */
+    .stApp {
+        background-color: #0e1117;
+    }
+
+    /* Headers */
+    h1, h2, h3 {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+
+    /* Cards */
+    .metric-card {
+        background: linear-gradient(135deg, #1a1f2e 0%, #151922 100%);
+        border: 1px solid #2d3748;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 10px 0;
+    }
+
+    /* Signal boxes */
+    .signal-buy {
+        background: linear-gradient(135deg, #065f46 0%, #047857 100%);
+        border-left: 4px solid #10b981;
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+    }
+
+    .signal-sell {
+        background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
+        border-left: 4px solid #ef4444;
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+    }
+
+    .signal-neutral {
+        background: linear-gradient(135deg, #78350f 0%, #92400e 100%);
+        border-left: 4px solid #f59e0b;
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+    }
+
+    /* Tables */
+    .dataframe {
+        font-size: 14px !important;
+    }
+
+    /* Sidebar */
+    .css-1d391kg {
+        background-color: #1a1f2e;
+    }
+
+    /* Metrics */
+    [data-testid="stMetricValue"] {
+        font-size: 24px !important;
+        font-weight: 700 !important;
+    }
+
+    /* Remove default streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+
+    /* Professional buttons */
+    .stButton > button {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 10px 24px;
+        font-weight: 600;
+    }
+
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    }
+
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        background-color: #1a1f2e;
+        border-radius: 6px;
+        padding: 10px 20px;
+    }
+
+    /* Indicator colors */
+    .bullish { color: #10b981; }
+    .bearish { color: #ef4444; }
+    .neutral { color: #f59e0b; }
+</style>
+""", unsafe_allow_html=True)
+
 # ===== PASSWORD PROTECTION =====
 def check_password():
-    """Returns True if the user has entered the correct password."""
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
 
     if st.session_state.authenticated:
         return True
 
-    st.title("🔐 Trading Signals Pro")
-    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("<h1 style='text-align: center; margin-top: 100px;'>TRADING SIGNALS PRO</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #6b7280;'>Professional Market Analysis Platform</p>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
 
-    password = st.text_input("Indtast adgangskode:", type="password", key="password_input")
+        password = st.text_input("Access Code", type="password", key="password_input")
 
-    if st.button("Log ind", type="primary"):
-        if password == "Money":
-            st.session_state.authenticated = True
-            st.rerun()
-        else:
-            st.error("Forkert adgangskode. Prøv igen.")
+        if st.button("ENTER", use_container_width=True):
+            if password == "Money":
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("Invalid access code")
 
     return False
 
 if not check_password():
     st.stop()
 
-# ===== CACHING FUNCTIONS =====
+# ===== DATA FUNCTIONS =====
 @st.cache_data(ttl=60)
 def fetch_stock_data(symbol, period="6mo", interval="1d"):
-    """Fetch stock data with caching"""
     try:
         ticker = yf.Ticker(symbol)
         data = ticker.history(period=period, interval=interval)
@@ -77,40 +177,32 @@ def fetch_stock_data(symbol, period="6mo", interval="1d"):
 
 @st.cache_data(ttl=60)
 def fetch_multi_timeframe_data(symbol):
-    """Fetch data for multiple timeframes"""
     timeframes = {}
     try:
         ticker = yf.Ticker(symbol)
 
-        # Daily data (6 months)
         daily = ticker.history(period="6mo", interval="1d")
         if not daily.empty:
             daily.columns = [c.lower() for c in daily.columns]
             timeframes['1D'] = daily
 
-        # Weekly data (2 years)
         weekly = ticker.history(period="2y", interval="1wk")
         if not weekly.empty:
             weekly.columns = [c.lower() for c in weekly.columns]
             timeframes['1W'] = weekly
 
-        # Monthly data (5 years)
         monthly = ticker.history(period="5y", interval="1mo")
         if not monthly.empty:
             monthly.columns = [c.lower() for c in monthly.columns]
             timeframes['1M'] = monthly
-
     except:
         pass
-
     return timeframes
 
 @st.cache_data(ttl=300)
 def fetch_news_sentiment(keywords, max_articles=20):
-    """Fetch and analyze news from multiple sources"""
     articles = []
-
-    for source, url in list(NEWS_RSS_FEEDS.items())[:8]:
+    for source, url in list(NEWS_RSS_FEEDS.items())[:10]:
         try:
             feed = feedparser.parse(url)
             for entry in feed.entries[:5]:
@@ -118,42 +210,37 @@ def fetch_news_sentiment(keywords, max_articles=20):
                 summary = entry.get('summary', entry.get('description', ''))[:200]
                 if any(kw.lower() in (title + summary).lower() for kw in keywords):
                     articles.append({
-                        'source': source,
+                        'source': source.replace('_', ' ').title(),
                         'title': title,
                         'summary': summary,
-                        'link': entry.get('link', '')
+                        'link': entry.get('link', ''),
+                        'published': entry.get('published', '')
                     })
         except:
             continue
 
-    # Analyze sentiment
     sentiments = []
     for article in articles[:max_articles]:
         text = article['title'] + ' ' + article['summary']
         blob = TextBlob(text)
         score = blob.sentiment.polarity
 
-        # Financial keyword boost
         text_lower = text.lower()
-        bullish = ['surge', 'rally', 'gain', 'rise', 'bullish', 'breakout', 'buy', 'upgrade', 'beat', 'record', 'soar', 'jump']
-        bearish = ['crash', 'plunge', 'drop', 'fall', 'bearish', 'dump', 'sell', 'downgrade', 'miss', 'fear', 'tank', 'sink']
+        bullish = ['surge', 'rally', 'gain', 'rise', 'bullish', 'breakout', 'buy', 'upgrade', 'beat', 'record', 'soar', 'jump', 'profit']
+        bearish = ['crash', 'plunge', 'drop', 'fall', 'bearish', 'dump', 'sell', 'downgrade', 'miss', 'fear', 'tank', 'sink', 'loss']
 
         for word in bullish:
-            if word in text_lower:
-                score += 0.15
+            if word in text_lower: score += 0.15
         for word in bearish:
-            if word in text_lower:
-                score -= 0.15
+            if word in text_lower: score -= 0.15
 
         article['sentiment'] = max(-1, min(1, score))
         sentiments.append(score)
 
-    avg_sentiment = np.mean(sentiments) if sentiments else 0
-    return articles, avg_sentiment
+    return articles, np.mean(sentiments) if sentiments else 0
 
 @st.cache_data(ttl=60)
 def get_fear_greed_index():
-    """Get Fear & Greed Index for crypto"""
     try:
         response = requests.get(API_ENDPOINTS['fear_greed_crypto'], timeout=5)
         data = response.json()
@@ -165,8 +252,7 @@ def get_fear_greed_index():
         return None
 
 @st.cache_data(ttl=120)
-def get_tradingview_analysis(symbol, exchange="NASDAQ", screener="america"):
-    """Get TradingView technical analysis for multiple timeframes"""
+def get_tradingview_analysis(symbol):
     if not TRADINGVIEW_AVAILABLE:
         return None
 
@@ -178,10 +264,8 @@ def get_tradingview_analysis(symbol, exchange="NASDAQ", screener="america"):
     ]
 
     try:
-        # Clean symbol for TradingView
         clean_symbol = symbol.replace('-USD', '').replace('=X', '').replace('-', '')
 
-        # Determine exchange and screener
         if 'USD' in symbol or symbol in ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'DOGE']:
             exchange = "BINANCE"
             screener = "crypto"
@@ -190,18 +274,12 @@ def get_tradingview_analysis(symbol, exchange="NASDAQ", screener="america"):
             exchange = "FX_IDC"
             screener = "forex"
         else:
-            # Try common exchanges for stocks
+            exchange = "NASDAQ"
+            screener = "america"
             for ex in ["NASDAQ", "NYSE", "AMEX"]:
                 try:
-                    handler = TA_Handler(
-                        symbol=clean_symbol,
-                        exchange=ex,
-                        screener=screener,
-                        interval=Interval.INTERVAL_1_DAY,
-                        timeout=10
-                    )
-                    analysis = handler.get_analysis()
-                    if analysis:
+                    handler = TA_Handler(symbol=clean_symbol, exchange=ex, screener=screener, interval=Interval.INTERVAL_1_DAY, timeout=10)
+                    if handler.get_analysis():
                         exchange = ex
                         break
                 except:
@@ -209,13 +287,7 @@ def get_tradingview_analysis(symbol, exchange="NASDAQ", screener="america"):
 
         for interval, name in intervals:
             try:
-                handler = TA_Handler(
-                    symbol=clean_symbol,
-                    exchange=exchange,
-                    screener=screener,
-                    interval=interval,
-                    timeout=10
-                )
+                handler = TA_Handler(symbol=clean_symbol, exchange=exchange, screener=screener, interval=interval, timeout=10)
                 analysis = handler.get_analysis()
                 results[name] = {
                     'summary': analysis.summary,
@@ -227,63 +299,35 @@ def get_tradingview_analysis(symbol, exchange="NASDAQ", screener="america"):
                 continue
 
         return results if results else None
-    except Exception as e:
-        return None
-
-@st.cache_data(ttl=300)
-def get_finnhub_sentiment(symbol):
-    """Get news sentiment from Finnhub (free tier)"""
-    try:
-        url = f"https://finnhub.io/api/v1/stock/social-sentiment?symbol={symbol}&token=demo"
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('reddit') or data.get('twitter'):
-                reddit = data.get('reddit', [{}])
-                twitter = data.get('twitter', [{}])
-                reddit_score = reddit[-1].get('score', 0) if reddit else 0
-                twitter_score = twitter[-1].get('score', 0) if twitter else 0
-                return {
-                    'reddit_sentiment': reddit_score,
-                    'twitter_sentiment': twitter_score,
-                    'combined': (reddit_score + twitter_score) / 2
-                }
     except:
-        pass
-    return None
+        return None
 
 @st.cache_data(ttl=600)
 def get_analyst_ratings(symbol):
-    """Get analyst recommendations from Yahoo Finance"""
     try:
         ticker = yf.Ticker(symbol)
-        recommendations = ticker.recommendations
-        if recommendations is not None and len(recommendations) > 0:
-            latest = recommendations.tail(5)
-            buy_count = latest['strongBuy'].sum() + latest['buy'].sum()
-            sell_count = latest['strongSell'].sum() + latest['sell'].sum()
-            hold_count = latest['hold'].sum()
-
-            total = buy_count + sell_count + hold_count
+        rec = ticker.recommendations
+        if rec is not None and len(rec) > 0:
+            latest = rec.tail(5)
+            buy = latest['strongBuy'].sum() + latest['buy'].sum()
+            sell = latest['strongSell'].sum() + latest['sell'].sum()
+            hold = latest['hold'].sum()
+            total = buy + sell + hold
             if total > 0:
-                return {
-                    'buy': buy_count,
-                    'sell': sell_count,
-                    'hold': hold_count,
-                    'rating': 'BUY' if buy_count > sell_count else 'SELL' if sell_count > buy_count else 'HOLD',
-                    'buy_pct': (buy_count / total) * 100
-                }
+                return {'buy': buy, 'sell': sell, 'hold': hold, 'buy_pct': (buy/total)*100}
     except:
         pass
     return None
 
 @st.cache_data(ttl=300)
 def get_stock_info(symbol):
-    """Get additional stock info from Yahoo Finance"""
     try:
         ticker = yf.Ticker(symbol)
         info = ticker.info
         return {
+            'name': info.get('shortName', symbol),
+            'sector': info.get('sector', 'N/A'),
+            'industry': info.get('industry', 'N/A'),
             'market_cap': info.get('marketCap', 0),
             'pe_ratio': info.get('trailingPE', 0),
             'forward_pe': info.get('forwardPE', 0),
@@ -292,24 +336,20 @@ def get_stock_info(symbol):
             '52w_high': info.get('fiftyTwoWeekHigh', 0),
             '52w_low': info.get('fiftyTwoWeekLow', 0),
             'avg_volume': info.get('averageVolume', 0),
-            'short_name': info.get('shortName', symbol),
-            'sector': info.get('sector', 'Unknown'),
-            'industry': info.get('industry', 'Unknown')
         }
     except:
         return None
 
-# ===== ADVANCED TECHNICAL ANALYSIS =====
+# ===== TECHNICAL ANALYSIS =====
 def calculate_indicators(data):
-    """Calculate comprehensive technical indicators"""
     if data is None or len(data) < 50:
         return None
 
     df = data.copy()
 
-    # Momentum Indicators
+    # Momentum
     df['rsi'] = ta.momentum.rsi(df['close'], window=14)
-    df['rsi_6'] = ta.momentum.rsi(df['close'], window=6)  # Fast RSI
+    df['rsi_6'] = ta.momentum.rsi(df['close'], window=6)
     df['stoch_k'] = ta.momentum.stoch(df['high'], df['low'], df['close'], window=14)
     df['stoch_d'] = ta.momentum.stoch_signal(df['high'], df['low'], df['close'], window=14)
     df['cci'] = ta.trend.cci(df['high'], df['low'], df['close'], window=20)
@@ -317,7 +357,7 @@ def calculate_indicators(data):
     df['roc'] = ta.momentum.roc(df['close'], window=12)
     df['ultimate_osc'] = ta.momentum.ultimate_oscillator(df['high'], df['low'], df['close'])
 
-    # Trend Indicators
+    # Trend
     df['sma_10'] = ta.trend.sma_indicator(df['close'], window=10)
     df['sma_20'] = ta.trend.sma_indicator(df['close'], window=20)
     df['sma_50'] = ta.trend.sma_indicator(df['close'], window=50)
@@ -337,13 +377,11 @@ def calculate_indicators(data):
     df['adx_pos'] = ta.trend.adx_pos(df['high'], df['low'], df['close'], window=14)
     df['adx_neg'] = ta.trend.adx_neg(df['high'], df['low'], df['close'], window=14)
 
-    # Ichimoku Cloud
+    # Ichimoku
     df['ichimoku_a'] = ta.trend.ichimoku_a(df['high'], df['low'])
     df['ichimoku_b'] = ta.trend.ichimoku_b(df['high'], df['low'])
-    df['ichimoku_base'] = ta.trend.ichimoku_base_line(df['high'], df['low'])
-    df['ichimoku_conv'] = ta.trend.ichimoku_conversion_line(df['high'], df['low'])
 
-    # Volatility Indicators
+    # Volatility
     bb = ta.volatility.BollingerBands(df['close'], window=20, window_dev=2)
     df['bb_upper'] = bb.bollinger_hband()
     df['bb_middle'] = bb.bollinger_mavg()
@@ -354,834 +392,539 @@ def calculate_indicators(data):
     df['atr'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], window=14)
     df['atr_pct'] = (df['atr'] / df['close']) * 100
 
-    kc = ta.volatility.KeltnerChannel(df['high'], df['low'], df['close'], window=20)
-    df['kc_upper'] = kc.keltner_channel_hband()
-    df['kc_lower'] = kc.keltner_channel_lband()
-    df['kc_middle'] = kc.keltner_channel_mband()
-
-    # Volume Indicators
+    # Volume
     df['obv'] = ta.volume.on_balance_volume(df['close'], df['volume'])
     df['mfi'] = ta.volume.money_flow_index(df['high'], df['low'], df['close'], df['volume'], window=14)
     df['volume_sma'] = df['volume'].rolling(window=20).mean()
-    df['vwap'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
     df['cmf'] = ta.volume.chaikin_money_flow(df['high'], df['low'], df['close'], df['volume'], window=20)
-    df['force_index'] = ta.volume.force_index(df['close'], df['volume'], window=13)
 
-    # Calculate Support and Resistance
+    # Pivot Points
     df['pivot'] = (df['high'].shift(1) + df['low'].shift(1) + df['close'].shift(1)) / 3
     df['r1'] = 2 * df['pivot'] - df['low'].shift(1)
     df['s1'] = 2 * df['pivot'] - df['high'].shift(1)
     df['r2'] = df['pivot'] + (df['high'].shift(1) - df['low'].shift(1))
     df['s2'] = df['pivot'] - (df['high'].shift(1) - df['low'].shift(1))
-    df['r3'] = df['high'].shift(1) + 2 * (df['pivot'] - df['low'].shift(1))
-    df['s3'] = df['low'].shift(1) - 2 * (df['high'].shift(1) - df['pivot'])
 
-    # Volatility metrics
+    # Risk metrics
     df['daily_return'] = df['close'].pct_change()
     df['volatility_20'] = df['daily_return'].rolling(window=20).std() * np.sqrt(252) * 100
-
-    # Calculate drawdown
     df['cummax'] = df['close'].cummax()
     df['drawdown'] = (df['close'] - df['cummax']) / df['cummax'] * 100
 
     return df
 
-def calculate_support_resistance(data, window=20):
-    """Calculate key support and resistance levels"""
-    if data is None or len(data) < window:
-        return []
+def calculate_confluence(data, tv_analysis, news_sentiment, fear_greed, analyst_ratings):
+    confluence = {'sources': {}, 'bullish': 0, 'bearish': 0, 'total': 0}
 
-    levels = []
-    highs = data['high'].values
-    lows = data['low'].values
-    closes = data['close'].values
-
-    # Find local maxima and minima
-    for i in range(window, len(data) - window):
-        # Resistance (local high)
-        if highs[i] == max(highs[i-window:i+window+1]):
-            levels.append({'price': highs[i], 'type': 'resistance', 'strength': 1})
-        # Support (local low)
-        if lows[i] == min(lows[i-window:i+window+1]):
-            levels.append({'price': lows[i], 'type': 'support', 'strength': 1})
-
-    # Consolidate nearby levels
-    consolidated = []
-    threshold = closes[-1] * 0.02  # 2% threshold
-
-    for level in sorted(levels, key=lambda x: x['price']):
-        merged = False
-        for c in consolidated:
-            if abs(c['price'] - level['price']) < threshold:
-                c['strength'] += 1
-                c['price'] = (c['price'] + level['price']) / 2
-                merged = True
-                break
-        if not merged:
-            consolidated.append(level)
-
-    # Sort by strength and return top levels
-    return sorted(consolidated, key=lambda x: -x['strength'])[:8]
-
-def calculate_confluence_score(data, tf_signals, tv_analysis, news_sentiment, fear_greed, analyst_ratings):
-    """Calculate confluence score from multiple sources and timeframes"""
-
-    confluence = {
-        'sources': {},
-        'total_bullish': 0,
-        'total_bearish': 0,
-        'total_sources': 0,
-        'score': 0,
-        'confidence': 'LAV'
-    }
-
-    # 1. Technical Indicators (Local calculation)
     if data is not None and len(data) >= 2:
         latest = data.iloc[-1]
-        bullish = 0
-        bearish = 0
+        price = latest['close']
 
-        # RSI
+        # Technical signals
+        signals = []
+
         rsi = latest.get('rsi')
         if rsi:
-            if rsi < 30: bullish += 2
-            elif rsi < 40: bullish += 1
-            elif rsi > 70: bearish += 2
-            elif rsi > 60: bearish += 1
+            if rsi < 30: signals.append(('RSI', 'BUY', 2))
+            elif rsi > 70: signals.append(('RSI', 'SELL', 2))
+            else: signals.append(('RSI', 'NEUTRAL', 0))
 
-        # MACD
         macd_hist = latest.get('macd_hist')
         if macd_hist is not None:
-            if macd_hist > 0: bullish += 1
-            else: bearish += 1
+            if macd_hist > 0: signals.append(('MACD', 'BUY', 1))
+            else: signals.append(('MACD', 'SELL', 1))
 
-        # Moving Averages
-        price = latest['close']
-        sma_20 = latest.get('sma_20')
-        sma_50 = latest.get('sma_50')
-        sma_200 = latest.get('sma_200')
+        sma_20, sma_50, sma_200 = latest.get('sma_20'), latest.get('sma_50'), latest.get('sma_200')
 
-        if sma_20 and price > sma_20: bullish += 1
-        elif sma_20: bearish += 1
+        if sma_20:
+            if price > sma_20: signals.append(('SMA 20', 'BUY', 1))
+            else: signals.append(('SMA 20', 'SELL', 1))
 
-        if sma_50 and price > sma_50: bullish += 1
-        elif sma_50: bearish += 1
+        if sma_50:
+            if price > sma_50: signals.append(('SMA 50', 'BUY', 1))
+            else: signals.append(('SMA 50', 'SELL', 1))
 
-        if sma_200 and price > sma_200: bullish += 2  # Golden/Death cross weight
-        elif sma_200: bearish += 2
+        if sma_200 and not pd.isna(sma_200):
+            if price > sma_200: signals.append(('SMA 200', 'BUY', 2))
+            else: signals.append(('SMA 200', 'SELL', 2))
 
-        # Stochastic
-        stoch_k = latest.get('stoch_k')
-        if stoch_k:
-            if stoch_k < 20: bullish += 1
-            elif stoch_k > 80: bearish += 1
+        stoch = latest.get('stoch_k')
+        if stoch:
+            if stoch < 20: signals.append(('Stochastic', 'BUY', 1))
+            elif stoch > 80: signals.append(('Stochastic', 'SELL', 1))
 
-        # CCI
-        cci = latest.get('cci')
-        if cci:
-            if cci < -100: bullish += 1
-            elif cci > 100: bearish += 1
-
-        # MFI
         mfi = latest.get('mfi')
         if mfi:
-            if mfi < 20: bullish += 1
-            elif mfi > 80: bearish += 1
+            if mfi < 20: signals.append(('MFI', 'BUY', 1))
+            elif mfi > 80: signals.append(('MFI', 'SELL', 1))
 
-        # Bollinger Bands
         bb_pct = latest.get('bb_pct')
         if bb_pct is not None:
-            if bb_pct < 0: bullish += 1
-            elif bb_pct > 1: bearish += 1
+            if bb_pct < 0: signals.append(('Bollinger', 'BUY', 1))
+            elif bb_pct > 1: signals.append(('Bollinger', 'SELL', 1))
 
-        # Ichimoku
-        ichimoku_a = latest.get('ichimoku_a')
-        ichimoku_b = latest.get('ichimoku_b')
-        if ichimoku_a and ichimoku_b:
-            if price > ichimoku_a and price > ichimoku_b: bullish += 2
-            elif price < ichimoku_a and price < ichimoku_b: bearish += 2
+        for name, signal, weight in signals:
+            confluence['sources'][name] = signal
+            if signal == 'BUY': confluence['bullish'] += weight
+            elif signal == 'SELL': confluence['bearish'] += weight
+            confluence['total'] += 1
 
-        total = bullish + bearish
-        if total > 0:
-            if bullish > bearish:
-                confluence['sources']['Teknisk Analyse'] = {'signal': 'KØB', 'strength': bullish / total}
-            elif bearish > bullish:
-                confluence['sources']['Teknisk Analyse'] = {'signal': 'SÆLG', 'strength': bearish / total}
-            else:
-                confluence['sources']['Teknisk Analyse'] = {'signal': 'NEUTRAL', 'strength': 0.5}
-
-            confluence['total_bullish'] += bullish
-            confluence['total_bearish'] += bearish
-            confluence['total_sources'] += 1
-
-    # 2. Multi-Timeframe TradingView Analysis
+    # TradingView
     if tv_analysis:
         for tf, analysis in tv_analysis.items():
-            summary = analysis.get('summary', {})
-            rec = summary.get('RECOMMENDATION', 'NEUTRAL')
-            buy_count = summary.get('BUY', 0)
-            sell_count = summary.get('SELL', 0)
-
+            rec = analysis.get('summary', {}).get('RECOMMENDATION', 'NEUTRAL')
             if rec in ['STRONG_BUY', 'BUY']:
-                confluence['sources'][f'TradingView {tf}'] = {'signal': 'KØB', 'strength': buy_count / max(1, buy_count + sell_count)}
-                confluence['total_bullish'] += 2 if rec == 'STRONG_BUY' else 1
+                confluence['sources'][f'TV {tf}'] = 'BUY'
+                confluence['bullish'] += 2 if 'STRONG' in rec else 1
             elif rec in ['STRONG_SELL', 'SELL']:
-                confluence['sources'][f'TradingView {tf}'] = {'signal': 'SÆLG', 'strength': sell_count / max(1, buy_count + sell_count)}
-                confluence['total_bearish'] += 2 if rec == 'STRONG_SELL' else 1
+                confluence['sources'][f'TV {tf}'] = 'SELL'
+                confluence['bearish'] += 2 if 'STRONG' in rec else 1
             else:
-                confluence['sources'][f'TradingView {tf}'] = {'signal': 'NEUTRAL', 'strength': 0.5}
+                confluence['sources'][f'TV {tf}'] = 'NEUTRAL'
+            confluence['total'] += 1
 
-            confluence['total_sources'] += 1
-
-    # 3. News Sentiment
+    # News
     if news_sentiment:
-        if news_sentiment > 0.2:
-            confluence['sources']['Nyheder'] = {'signal': 'KØB', 'strength': min(1, news_sentiment)}
-            confluence['total_bullish'] += 1
-        elif news_sentiment < -0.2:
-            confluence['sources']['Nyheder'] = {'signal': 'SÆLG', 'strength': min(1, abs(news_sentiment))}
-            confluence['total_bearish'] += 1
+        if news_sentiment > 0.15:
+            confluence['sources']['News'] = 'BUY'
+            confluence['bullish'] += 1
+        elif news_sentiment < -0.15:
+            confluence['sources']['News'] = 'SELL'
+            confluence['bearish'] += 1
         else:
-            confluence['sources']['Nyheder'] = {'signal': 'NEUTRAL', 'strength': 0.5}
-        confluence['total_sources'] += 1
+            confluence['sources']['News'] = 'NEUTRAL'
+        confluence['total'] += 1
 
-    # 4. Fear & Greed Index
+    # Fear & Greed
     if fear_greed:
-        fg_value = fear_greed['value']
-        if fg_value < 25:
-            confluence['sources']['Fear & Greed'] = {'signal': 'KØB', 'strength': (50 - fg_value) / 50}
-            confluence['total_bullish'] += 2
-        elif fg_value > 75:
-            confluence['sources']['Fear & Greed'] = {'signal': 'SÆLG', 'strength': (fg_value - 50) / 50}
-            confluence['total_bearish'] += 2
+        fg = fear_greed['value']
+        if fg < 25:
+            confluence['sources']['Fear/Greed'] = 'BUY'
+            confluence['bullish'] += 2
+        elif fg > 75:
+            confluence['sources']['Fear/Greed'] = 'SELL'
+            confluence['bearish'] += 2
         else:
-            confluence['sources']['Fear & Greed'] = {'signal': 'NEUTRAL', 'strength': 0.5}
-        confluence['total_sources'] += 1
+            confluence['sources']['Fear/Greed'] = 'NEUTRAL'
+        confluence['total'] += 1
 
-    # 5. Analyst Ratings
+    # Analysts
     if analyst_ratings:
-        buy_pct = analyst_ratings.get('buy_pct', 50)
-        if buy_pct > 65:
-            confluence['sources']['Analytikere'] = {'signal': 'KØB', 'strength': buy_pct / 100}
-            confluence['total_bullish'] += 1
-        elif buy_pct < 35:
-            confluence['sources']['Analytikere'] = {'signal': 'SÆLG', 'strength': (100 - buy_pct) / 100}
-            confluence['total_bearish'] += 1
+        pct = analyst_ratings.get('buy_pct', 50)
+        if pct > 65:
+            confluence['sources']['Analysts'] = 'BUY'
+            confluence['bullish'] += 1
+        elif pct < 35:
+            confluence['sources']['Analysts'] = 'SELL'
+            confluence['bearish'] += 1
         else:
-            confluence['sources']['Analytikere'] = {'signal': 'NEUTRAL', 'strength': 0.5}
-        confluence['total_sources'] += 1
+            confluence['sources']['Analysts'] = 'NEUTRAL'
+        confluence['total'] += 1
 
-    # Calculate final confluence score
-    total = confluence['total_bullish'] + confluence['total_bearish']
+    # Calculate final
+    total = confluence['bullish'] + confluence['bearish']
     if total > 0:
-        if confluence['total_bullish'] > confluence['total_bearish']:
-            confluence['score'] = (confluence['total_bullish'] / total) * 100
-            confluence['signal'] = 'KØB'
+        if confluence['bullish'] > confluence['bearish']:
+            confluence['signal'] = 'BUY'
+            confluence['score'] = (confluence['bullish'] / total) * 100
+        elif confluence['bearish'] > confluence['bullish']:
+            confluence['signal'] = 'SELL'
+            confluence['score'] = (confluence['bearish'] / total) * 100
         else:
-            confluence['score'] = (confluence['total_bearish'] / total) * 100
-            confluence['signal'] = 'SÆLG'
+            confluence['signal'] = 'NEUTRAL'
+            confluence['score'] = 50
     else:
-        confluence['score'] = 50
         confluence['signal'] = 'NEUTRAL'
+        confluence['score'] = 50
 
-    # Determine confidence based on agreement
-    agreeing_sources = sum(1 for s in confluence['sources'].values() if s['signal'] == confluence.get('signal', 'NEUTRAL'))
-    agreement_pct = agreeing_sources / max(1, confluence['total_sources']) * 100
+    # Confidence
+    agreeing = sum(1 for s in confluence['sources'].values() if s == confluence['signal'])
+    pct = agreeing / max(1, len(confluence['sources'])) * 100
 
-    if agreement_pct >= 80 and confluence['total_sources'] >= 4:
-        confluence['confidence'] = 'MEGET HØJ'
-    elif agreement_pct >= 65 and confluence['total_sources'] >= 3:
-        confluence['confidence'] = 'HØJ'
-    elif agreement_pct >= 50:
-        confluence['confidence'] = 'MEDIUM'
+    if pct >= 75 and len(confluence['sources']) >= 5:
+        confluence['confidence'] = 'VERY HIGH'
+    elif pct >= 60 and len(confluence['sources']) >= 4:
+        confluence['confidence'] = 'HIGH'
+    elif pct >= 50:
+        confluence['confidence'] = 'MODERATE'
     else:
-        confluence['confidence'] = 'LAV'
+        confluence['confidence'] = 'LOW'
 
     return confluence
 
-def calculate_risk_metrics(data):
-    """Calculate risk metrics"""
+def calculate_risk(data):
     if data is None or len(data) < 20:
         return None
 
-    metrics = {}
-
-    # Volatility
-    metrics['volatility_20d'] = data['volatility_20'].iloc[-1] if 'volatility_20' in data else 0
-
-    # Max drawdown (last 6 months)
-    metrics['max_drawdown'] = data['drawdown'].min() if 'drawdown' in data else 0
-
-    # Current drawdown
-    metrics['current_drawdown'] = data['drawdown'].iloc[-1] if 'drawdown' in data else 0
-
-    # ATR percentage
-    metrics['atr_pct'] = data['atr_pct'].iloc[-1] if 'atr_pct' in data else 0
-
-    # Sharpe-like ratio (simplified)
-    returns = data['daily_return'].dropna()
-    if len(returns) > 0:
-        avg_return = returns.mean() * 252
-        std_return = returns.std() * np.sqrt(252)
-        metrics['sharpe_ratio'] = avg_return / std_return if std_return > 0 else 0
-    else:
-        metrics['sharpe_ratio'] = 0
-
-    # Risk level
-    if metrics['volatility_20d'] > 50 or metrics['max_drawdown'] < -30:
-        metrics['risk_level'] = 'HØJ RISIKO'
-        metrics['risk_color'] = 'red'
-    elif metrics['volatility_20d'] > 25 or metrics['max_drawdown'] < -15:
-        metrics['risk_level'] = 'MEDIUM RISIKO'
-        metrics['risk_color'] = 'orange'
-    else:
-        metrics['risk_level'] = 'LAV RISIKO'
-        metrics['risk_color'] = 'green'
-
-    return metrics
-
-def generate_final_signal(confluence, risk_metrics):
-    """Generate final signal with risk adjustment"""
-
-    signal = confluence.get('signal', 'NEUTRAL')
-    score = confluence.get('score', 50)
-    confidence = confluence.get('confidence', 'LAV')
-
-    # Risk adjustment
-    if risk_metrics:
-        if risk_metrics.get('risk_level') == 'HØJ RISIKO':
-            score = score * 0.7  # Reduce confidence for high risk
-            if confidence == 'MEGET HØJ':
-                confidence = 'HØJ'
-            elif confidence == 'HØJ':
-                confidence = 'MEDIUM'
-
-    # Final recommendation
-    if score >= 70 and confidence in ['HØJ', 'MEGET HØJ']:
-        if signal == 'KØB':
-            recommendation = 'STÆRK KØB'
-        else:
-            recommendation = 'STÆRK SÆLG'
-    elif score >= 55:
-        recommendation = signal
-    else:
-        recommendation = 'VENT'
-
     return {
-        'signal': recommendation,
-        'score': score,
-        'confidence': confidence,
-        'original_signal': signal
+        'volatility': data['volatility_20'].iloc[-1] if 'volatility_20' in data else 0,
+        'max_drawdown': data['drawdown'].min() if 'drawdown' in data else 0,
+        'current_drawdown': data['drawdown'].iloc[-1] if 'drawdown' in data else 0,
+        'atr_pct': data['atr_pct'].iloc[-1] if 'atr_pct' in data else 0,
     }
 
-def scan_industry(industry_name, stocks, progress_callback=None):
-    """Scan all stocks in an industry for signals"""
+def scan_industry(stocks, progress_cb=None):
     results = []
-    total = len(stocks)
-
     for i, symbol in enumerate(stocks):
-        if progress_callback:
-            progress_callback((i + 1) / total)
-
+        if progress_cb: progress_cb((i + 1) / len(stocks))
         try:
             data = fetch_stock_data(symbol, period="3mo")
-            if data is None or len(data) < 50:
-                continue
+            if data is None or len(data) < 50: continue
 
             data = calculate_indicators(data)
-            confluence = calculate_confluence_score(data, {}, None, 0, None, None)
+            confluence = calculate_confluence(data, None, 0, None, None)
 
             latest = data.iloc[-1]
             prev = data.iloc[-2]
-            change = ((latest['close'] / prev['close']) - 1) * 100
 
             results.append({
                 'Symbol': symbol,
-                'Pris': latest['close'],
-                'Ændring': change,
+                'Price': latest['close'],
+                'Change': ((latest['close'] / prev['close']) - 1) * 100,
                 'RSI': latest.get('rsi', 0),
                 'Signal': confluence.get('signal', 'NEUTRAL'),
                 'Score': confluence.get('score', 50)
             })
-        except Exception:
+        except:
             continue
-
         time.sleep(0.1)
-
     return results
 
-# ===== STREAMLIT UI =====
-st.title("📈 Trading Signals Pro - Advanced Analysis")
+# ===== UI =====
+
+# Header
+st.markdown("""
+<div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #2d3748; margin-bottom: 20px;">
+    <h1 style="margin: 0; font-size: 24px;">TRADING SIGNALS PRO</h1>
+    <span style="color: #6b7280; font-size: 14px;">""" + datetime.now().strftime('%Y-%m-%d %H:%M:%S') + """</span>
+</div>
+""", unsafe_allow_html=True)
 
 # Sidebar
-st.sidebar.title("⚙️ Indstillinger")
+with st.sidebar:
+    st.markdown("### NAVIGATION")
+    mode = st.radio("", ["Analysis", "Scanner", "Market Overview"], label_visibility="collapsed")
 
-# Auto-refresh toggle
-auto_refresh = st.sidebar.checkbox("🔄 Auto-opdatering (30 sek)", value=False)
-if auto_refresh:
-    st.sidebar.info(f"Opdaterer automatisk hvert {REFRESH_INTERVAL} sekund")
+    st.markdown("---")
+    st.markdown("### MARKET")
+    market = st.selectbox("", ["Stocks", "Crypto", "Forex"], label_visibility="collapsed")
 
-# Mode selection
-mode = st.sidebar.radio("📊 Tilstand", ["Fuld Analyse", "Industri Scanner", "Marked Oversigt"])
+    st.markdown("---")
+    auto_refresh = st.checkbox("Auto-refresh (30s)")
 
-# Market selection
-market = st.sidebar.selectbox("🌍 Marked", ["Aktier", "Crypto", "Forex"])
+    if market == "Crypto":
+        fg = get_fear_greed_index()
+        if fg:
+            st.markdown("---")
+            st.markdown("### FEAR & GREED INDEX")
+            fg_color = "#10b981" if fg['value'] < 40 else "#ef4444" if fg['value'] > 60 else "#f59e0b"
+            st.markdown(f"<h2 style='color: {fg_color}; margin: 0;'>{fg['value']}</h2>", unsafe_allow_html=True)
+            st.caption(fg['label'])
 
-# Time display
-st.sidebar.markdown("---")
-st.sidebar.caption(f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+# Main content
+if mode == "Analysis":
+    col_select, col_space = st.columns([1, 3])
 
-# Fear & Greed for crypto
-if market == "Crypto":
-    fg = get_fear_greed_index()
-    if fg:
-        st.sidebar.markdown(f"### 😱 Fear & Greed: {fg['value']}")
-        st.sidebar.caption(fg['label'])
-
-# ===== MAIN CONTENT =====
-if mode == "Fuld Analyse":
-    col1, col2 = st.columns([1, 3])
-
-    with col1:
-        if market == "Aktier":
-            industry = st.selectbox("Industri", list(INDUSTRIES.keys()))
+    with col_select:
+        if market == "Stocks":
+            industry = st.selectbox("Sector", list(INDUSTRIES.keys()))
             symbol = st.selectbox("Symbol", INDUSTRIES[industry])
         elif market == "Crypto":
             symbol = st.selectbox("Symbol", CRYPTO_SYMBOLS)
         else:
             symbol = st.selectbox("Symbol", FOREX_PAIRS)
 
-        analyze_btn = st.button("🔍 Fuld Analyse", type="primary", use_container_width=True)
+        analyze = st.button("ANALYZE", use_container_width=True, type="primary")
 
-    if analyze_btn or auto_refresh:
-        with st.spinner(f"Udfører fuld analyse af {symbol}..."):
-            # Fetch multi-timeframe data
+    if analyze or auto_refresh:
+        with st.spinner("Analyzing..."):
             tf_data = fetch_multi_timeframe_data(symbol)
             data = tf_data.get('1D')
 
             if data is None or len(data) < 50:
-                st.error("Kunne ikke hente nok data for dette symbol")
+                st.error("Insufficient data for this symbol")
                 st.stop()
 
-            # Calculate indicators
             data = calculate_indicators(data)
-
-            # Get all external data
             keywords = [symbol.split('-')[0], symbol.replace('-USD', '')]
             articles, news_sentiment = fetch_news_sentiment(keywords)
             fg = get_fear_greed_index() if market == "Crypto" else None
             tv_analysis = get_tradingview_analysis(symbol)
             analyst_ratings = get_analyst_ratings(symbol)
             stock_info = get_stock_info(symbol)
-
-            # Calculate support/resistance
-            sr_levels = calculate_support_resistance(data)
-
-            # Calculate risk metrics
-            risk_metrics = calculate_risk_metrics(data)
-
-            # Calculate confluence score
-            confluence = calculate_confluence_score(
-                data, tf_data, tv_analysis, news_sentiment, fg, analyst_ratings
-            )
-
-            # Generate final signal
-            final = generate_final_signal(confluence, risk_metrics)
+            risk = calculate_risk(data)
+            confluence = calculate_confluence(data, tv_analysis, news_sentiment, fg, analyst_ratings)
 
             latest = data.iloc[-1]
             prev = data.iloc[-2]
             price = latest['close']
-            change_1d = ((price / prev['close']) - 1) * 100
+            change = ((price / prev['close']) - 1) * 100
 
-        # ===== DISPLAY RESULTS =====
-
-        # Top row: Signal and Key Metrics
+        # Results header
         st.markdown("---")
-        col_sig, col_conf, col_risk, col_price = st.columns(4)
 
-        with col_sig:
-            signal_color = "green" if "KØB" in final['signal'] else "red" if "SÆLG" in final['signal'] else "orange"
-            st.markdown(f"""
-            <div style="background-color: {signal_color}; padding: 20px; border-radius: 10px; text-align: center;">
-                <h2 style="color: white; margin: 0;">{'🟢' if 'KØB' in final['signal'] else '🔴' if 'SÆLG' in final['signal'] else '🟡'} {final['signal']}</h2>
-            </div>
-            """, unsafe_allow_html=True)
+        # Top metrics row
+        col1, col2, col3, col4, col5 = st.columns(5)
 
-        with col_conf:
-            st.metric("Confluence Score", f"{final['score']:.0f}%")
-            st.caption(f"Sikkerhed: {final['confidence']}")
+        with col1:
+            signal = confluence['signal']
+            score = confluence['score']
+            if signal == 'BUY':
+                st.markdown(f"""<div class="signal-buy"><h3 style="color: white; margin: 0;">BUY</h3><p style="color: #d1fae5; margin: 0;">{score:.0f}% Score</p></div>""", unsafe_allow_html=True)
+            elif signal == 'SELL':
+                st.markdown(f"""<div class="signal-sell"><h3 style="color: white; margin: 0;">SELL</h3><p style="color: #fecaca; margin: 0;">{score:.0f}% Score</p></div>""", unsafe_allow_html=True)
+            else:
+                st.markdown(f"""<div class="signal-neutral"><h3 style="color: white; margin: 0;">HOLD</h3><p style="color: #fef3c7; margin: 0;">Neutral</p></div>""", unsafe_allow_html=True)
 
-        with col_risk:
-            if risk_metrics:
-                st.metric("Risiko", risk_metrics['risk_level'])
-                st.caption(f"Volatilitet: {risk_metrics['volatility_20d']:.1f}%")
+        with col2:
+            st.metric("Price", f"${price:,.2f}", f"{change:+.2f}%")
 
-        with col_price:
-            st.metric("Pris", f"${price:,.2f}", f"{change_1d:+.2f}%")
+        with col3:
+            st.metric("Confidence", confluence['confidence'])
 
-        # Confluence Breakdown
+        with col4:
+            rsi_val = latest.get('rsi', 0)
+            st.metric("RSI (14)", f"{rsi_val:.1f}")
+
+        with col5:
+            if risk:
+                st.metric("Volatility", f"{risk['volatility']:.1f}%")
+
+        # Signal sources
         st.markdown("---")
-        st.subheader("🎯 Confluence Analyse - Alle Kilder")
+        st.markdown("### SIGNAL SOURCES")
 
-        source_cols = st.columns(min(6, len(confluence['sources'])))
-        for i, (source, data_src) in enumerate(confluence['sources'].items()):
+        source_cols = st.columns(min(8, len(confluence['sources'])))
+        for i, (source, sig) in enumerate(confluence['sources'].items()):
             with source_cols[i % len(source_cols)]:
-                emoji = "🟢" if data_src['signal'] == 'KØB' else "🔴" if data_src['signal'] == 'SÆLG' else "🟡"
-                strength_bar = "█" * int(data_src['strength'] * 5)
+                color = "#10b981" if sig == "BUY" else "#ef4444" if sig == "SELL" else "#6b7280"
                 st.markdown(f"""
-                **{source}**
-                {emoji} {data_src['signal']}
-                Styrke: {strength_bar}
-                """)
+                <div style="text-align: center; padding: 10px; background: #1a1f2e; border-radius: 6px; border-left: 3px solid {color};">
+                    <p style="margin: 0; font-size: 12px; color: #9ca3af;">{source}</p>
+                    <p style="margin: 0; font-weight: 600; color: {color};">{sig}</p>
+                </div>
+                """, unsafe_allow_html=True)
 
-        # Charts and Analysis
+        # Tabs
         st.markdown("---")
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 Pris Chart", "📊 Indikatorer", "🎯 Support/Resistance", "⚠️ Risiko", "📰 Nyheder"])
+        tab1, tab2, tab3, tab4 = st.tabs(["CHART", "INDICATORS", "RISK", "NEWS"])
 
         with tab1:
-            # Advanced price chart
-            fig = make_subplots(rows=4, cols=1, shared_xaxes=True,
-                               vertical_spacing=0.03,
-                               row_heights=[0.5, 0.15, 0.15, 0.2],
-                               subplot_titles=[f'{symbol} - Pris med Indikatorer', 'RSI', 'MACD', 'Volumen'])
+            fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05,
+                               row_heights=[0.6, 0.2, 0.2])
 
             # Candlestick
-            fig.add_trace(go.Candlestick(
-                x=data.index, open=data['open'], high=data['high'],
-                low=data['low'], close=data['close'], name='Pris'
-            ), row=1, col=1)
+            fig.add_trace(go.Candlestick(x=data.index, open=data['open'], high=data['high'],
+                low=data['low'], close=data['close'], name='Price',
+                increasing_line_color='#10b981', decreasing_line_color='#ef4444'), row=1, col=1)
 
             # Bollinger Bands
-            fig.add_trace(go.Scatter(x=data.index, y=data['bb_upper'],
-                line=dict(color='rgba(128,128,128,0.5)', width=1), name='BB Upper', showlegend=False), row=1, col=1)
-            fig.add_trace(go.Scatter(x=data.index, y=data['bb_lower'],
-                line=dict(color='rgba(128,128,128,0.5)', width=1), name='BB Lower',
-                fill='tonexty', fillcolor='rgba(128,128,128,0.1)', showlegend=False), row=1, col=1)
+            fig.add_trace(go.Scatter(x=data.index, y=data['bb_upper'], line=dict(color='#6b7280', width=1), name='BB', showlegend=False), row=1, col=1)
+            fig.add_trace(go.Scatter(x=data.index, y=data['bb_lower'], line=dict(color='#6b7280', width=1), fill='tonexty', fillcolor='rgba(107,114,128,0.1)', showlegend=False), row=1, col=1)
 
-            # Moving Averages
-            fig.add_trace(go.Scatter(x=data.index, y=data['sma_20'],
-                line=dict(color='orange', width=1), name='SMA 20'), row=1, col=1)
-            fig.add_trace(go.Scatter(x=data.index, y=data['sma_50'],
-                line=dict(color='blue', width=1), name='SMA 50'), row=1, col=1)
-            if 'sma_200' in data and not data['sma_200'].isna().all():
-                fig.add_trace(go.Scatter(x=data.index, y=data['sma_200'],
-                    line=dict(color='red', width=1), name='SMA 200'), row=1, col=1)
-
-            # Support/Resistance lines
-            for level in sr_levels[:4]:
-                color = 'green' if level['type'] == 'support' else 'red'
-                fig.add_hline(y=level['price'], line_dash="dash", line_color=color,
-                             opacity=0.5, row=1, col=1)
+            # MAs
+            fig.add_trace(go.Scatter(x=data.index, y=data['sma_20'], line=dict(color='#f59e0b', width=1), name='SMA 20'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=data.index, y=data['sma_50'], line=dict(color='#3b82f6', width=1), name='SMA 50'), row=1, col=1)
 
             # RSI
-            fig.add_trace(go.Scatter(x=data.index, y=data['rsi'],
-                line=dict(color='purple', width=1), name='RSI'), row=2, col=1)
-            fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
-            fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
-            fig.add_hrect(y0=30, y1=70, fillcolor="gray", opacity=0.1, row=2, col=1)
+            fig.add_trace(go.Scatter(x=data.index, y=data['rsi'], line=dict(color='#8b5cf6', width=1), name='RSI'), row=2, col=1)
+            fig.add_hline(y=70, line_dash="dash", line_color="#ef4444", row=2, col=1)
+            fig.add_hline(y=30, line_dash="dash", line_color="#10b981", row=2, col=1)
 
             # MACD
-            colors = ['green' if v >= 0 else 'red' for v in data['macd_hist']]
-            fig.add_trace(go.Bar(x=data.index, y=data['macd_hist'],
-                marker_color=colors, name='MACD Hist'), row=3, col=1)
-            fig.add_trace(go.Scatter(x=data.index, y=data['macd'],
-                line=dict(color='blue', width=1), name='MACD'), row=3, col=1)
-            fig.add_trace(go.Scatter(x=data.index, y=data['macd_signal'],
-                line=dict(color='orange', width=1), name='Signal'), row=3, col=1)
-
-            # Volume
-            vol_colors = ['green' if data['close'].iloc[i] >= data['open'].iloc[i] else 'red'
-                         for i in range(len(data))]
-            fig.add_trace(go.Bar(x=data.index, y=data['volume'],
-                marker_color=vol_colors, name='Volume', opacity=0.7), row=4, col=1)
-            fig.add_trace(go.Scatter(x=data.index, y=data['volume_sma'],
-                line=dict(color='blue', width=1), name='Vol SMA'), row=4, col=1)
+            colors = ['#10b981' if v >= 0 else '#ef4444' for v in data['macd_hist']]
+            fig.add_trace(go.Bar(x=data.index, y=data['macd_hist'], marker_color=colors, name='MACD'), row=3, col=1)
 
             fig.update_layout(
-                height=800,
+                height=600,
                 template='plotly_dark',
+                paper_bgcolor='#0e1117',
+                plot_bgcolor='#0e1117',
                 showlegend=True,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                xaxis_rangeslider_visible=False
+                legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                xaxis_rangeslider_visible=False,
+                margin=dict(l=0, r=0, t=30, b=0)
             )
 
             st.plotly_chart(fig, use_container_width=True)
 
         with tab2:
-            col_ind1, col_ind2, col_ind3 = st.columns(3)
+            col_m, col_t, col_v = st.columns(3)
 
-            with col_ind1:
-                st.markdown("### Momentum")
-                rsi = latest.get('rsi', 0)
-                stoch = latest.get('stoch_k', 0)
-                mfi = latest.get('mfi', 0)
-                cci = latest.get('cci', 0)
-                williams = latest.get('williams_r', 0)
+            with col_m:
+                st.markdown("#### Momentum")
+                indicators = [
+                    ("RSI (14)", latest.get('rsi', 0), 30, 70),
+                    ("Stochastic", latest.get('stoch_k', 0), 20, 80),
+                    ("MFI", latest.get('mfi', 0), 20, 80),
+                    ("CCI", latest.get('cci', 0), -100, 100),
+                    ("Williams %R", latest.get('williams_r', 0), -80, -20),
+                ]
+                for name, val, low, high in indicators:
+                    if val:
+                        status = "Oversold" if val < low else "Overbought" if val > high else "Neutral"
+                        color = "#10b981" if val < low else "#ef4444" if val > high else "#6b7280"
+                        st.markdown(f"**{name}**: <span style='color:{color}'>{val:.1f}</span> ({status})", unsafe_allow_html=True)
 
-                st.metric("RSI (14)", f"{rsi:.1f}",
-                         "Oversold" if rsi < 30 else "Overbought" if rsi > 70 else "Neutral")
-                st.metric("Stochastic K", f"{stoch:.1f}",
-                         "Oversold" if stoch < 20 else "Overbought" if stoch > 80 else "Neutral")
-                st.metric("MFI", f"{mfi:.1f}",
-                         "Oversold" if mfi < 20 else "Overbought" if mfi > 80 else "Neutral")
-                st.metric("CCI", f"{cci:.0f}",
-                         "Oversold" if cci < -100 else "Overbought" if cci > 100 else "Neutral")
-                st.metric("Williams %R", f"{williams:.1f}",
-                         "Oversold" if williams < -80 else "Overbought" if williams > -20 else "Neutral")
-
-            with col_ind2:
-                st.markdown("### Trend")
+            with col_t:
+                st.markdown("#### Trend")
                 adx = latest.get('adx', 0)
+                st.markdown(f"**ADX**: {adx:.1f} ({'Strong' if adx > 25 else 'Weak'} trend)")
                 macd_h = latest.get('macd_hist', 0)
+                st.markdown(f"**MACD**: {'Bullish' if macd_h > 0 else 'Bearish'}")
 
-                # MA positions
-                st.metric("ADX (Trend Styrke)", f"{adx:.1f}",
-                         "Stærk" if adx > 25 else "Svag")
-                st.metric("MACD Histogram", f"{macd_h:.4f}",
-                         "Bullish" if macd_h > 0 else "Bearish")
-
-                # Price vs MAs
-                st.markdown("**Pris vs Moving Averages:**")
-                mas = [('SMA 20', 'sma_20'), ('SMA 50', 'sma_50'), ('SMA 200', 'sma_200')]
-                for name, col in mas:
+                st.markdown("**Price vs MAs:**")
+                for ma, col in [('SMA 20', 'sma_20'), ('SMA 50', 'sma_50'), ('SMA 200', 'sma_200')]:
                     if col in latest and not pd.isna(latest[col]):
-                        status = "✅ Over" if price > latest[col] else "❌ Under"
-                        st.write(f"{name}: {status} ({latest[col]:.2f})")
+                        above = price > latest[col]
+                        st.markdown(f"- {ma}: {'Above' if above else 'Below'} (${latest[col]:.2f})")
 
-            with col_ind3:
-                st.markdown("### Volatilitet")
-                atr = latest.get('atr', 0)
-                atr_pct = latest.get('atr_pct', 0)
-                bb_width = latest.get('bb_width', 0)
-                bb_pct = latest.get('bb_pct', 0)
-
-                st.metric("ATR", f"${atr:.2f}", f"{atr_pct:.1f}% af pris")
-                st.metric("Bollinger Band %B", f"{bb_pct:.2f}",
-                         "Oversold" if bb_pct < 0 else "Overbought" if bb_pct > 1 else "Normal")
-                st.metric("BB Width", f"{bb_width:.4f}")
-
-                if risk_metrics:
-                    st.metric("20-dages Volatilitet", f"{risk_metrics['volatility_20d']:.1f}%")
+            with col_v:
+                st.markdown("#### Volatility")
+                st.markdown(f"**ATR**: ${latest.get('atr', 0):.2f} ({latest.get('atr_pct', 0):.1f}%)")
+                st.markdown(f"**BB %B**: {latest.get('bb_pct', 0):.2f}")
+                if risk:
+                    st.markdown(f"**20D Volatility**: {risk['volatility']:.1f}%")
 
         with tab3:
-            st.markdown("### 🎯 Support & Resistance Niveauer")
-
-            col_sr1, col_sr2 = st.columns(2)
-
-            with col_sr1:
-                st.markdown("**Pivot Points:**")
-                st.write(f"Pivot: ${latest.get('pivot', 0):.2f}")
-                st.write(f"R1: ${latest.get('r1', 0):.2f}")
-                st.write(f"R2: ${latest.get('r2', 0):.2f}")
-                st.write(f"R3: ${latest.get('r3', 0):.2f}")
-
-            with col_sr2:
-                st.markdown("**Support Niveauer:**")
-                st.write(f"S1: ${latest.get('s1', 0):.2f}")
-                st.write(f"S2: ${latest.get('s2', 0):.2f}")
-                st.write(f"S3: ${latest.get('s3', 0):.2f}")
-
-            st.markdown("---")
-            st.markdown("**Identificerede Nøgle-niveauer:**")
-
-            for level in sr_levels:
-                emoji = "🟢" if level['type'] == 'support' else "🔴"
-                strength_bar = "█" * level['strength']
-                pct_from_price = ((level['price'] - price) / price) * 100
-                st.write(f"{emoji} {level['type'].upper()}: ${level['price']:.2f} ({pct_from_price:+.1f}% fra nuværende pris) | Styrke: {strength_bar}")
-
-        with tab4:
-            if risk_metrics:
-                st.markdown("### ⚠️ Risiko Analyse")
-
+            if risk:
                 col_r1, col_r2 = st.columns(2)
-
                 with col_r1:
-                    st.metric("Risiko Niveau", risk_metrics['risk_level'])
-                    st.metric("20-dages Volatilitet", f"{risk_metrics['volatility_20d']:.1f}%")
-                    st.metric("ATR %", f"{risk_metrics['atr_pct']:.2f}%")
-
+                    st.metric("20-Day Volatility", f"{risk['volatility']:.1f}%")
+                    st.metric("Max Drawdown", f"{risk['max_drawdown']:.1f}%")
                 with col_r2:
-                    st.metric("Max Drawdown (6M)", f"{risk_metrics['max_drawdown']:.1f}%")
-                    st.metric("Current Drawdown", f"{risk_metrics['current_drawdown']:.1f}%")
-                    st.metric("Sharpe Ratio (approx)", f"{risk_metrics['sharpe_ratio']:.2f}")
+                    st.metric("Current Drawdown", f"{risk['current_drawdown']:.1f}%")
+                    st.metric("ATR %", f"{risk['atr_pct']:.2f}%")
 
                 # Drawdown chart
-                st.markdown("### Drawdown Over Tid")
                 fig_dd = go.Figure()
-                fig_dd.add_trace(go.Scatter(
-                    x=data.index, y=data['drawdown'],
-                    fill='tozeroy', fillcolor='rgba(255,0,0,0.3)',
-                    line=dict(color='red', width=1),
-                    name='Drawdown %'
-                ))
-                fig_dd.update_layout(height=300, template='plotly_dark')
+                fig_dd.add_trace(go.Scatter(x=data.index, y=data['drawdown'], fill='tozeroy',
+                    fillcolor='rgba(239,68,68,0.3)', line=dict(color='#ef4444', width=1)))
+                fig_dd.update_layout(height=200, template='plotly_dark', paper_bgcolor='#0e1117',
+                    plot_bgcolor='#0e1117', margin=dict(l=0, r=0, t=10, b=0), showlegend=False)
                 st.plotly_chart(fig_dd, use_container_width=True)
 
-        with tab5:
-            st.markdown("### 📰 Nyheds Sentiment")
-            st.metric("Samlet Sentiment", f"{news_sentiment:.2f}",
-                     "Positiv" if news_sentiment > 0.1 else "Negativ" if news_sentiment < -0.1 else "Neutral")
-
+        with tab4:
+            st.markdown(f"**Sentiment Score**: {news_sentiment:.2f}")
             if articles:
-                for article in articles[:5]:
-                    sentiment_emoji = "🟢" if article['sentiment'] > 0.1 else "🔴" if article['sentiment'] < -0.1 else "⚪"
+                for art in articles[:5]:
+                    color = "#10b981" if art['sentiment'] > 0.1 else "#ef4444" if art['sentiment'] < -0.1 else "#6b7280"
                     st.markdown(f"""
-                    {sentiment_emoji} **{article['source']}**
-                    {article['title'][:100]}...
-                    *Sentiment: {article['sentiment']:.2f}*
-                    """)
-                    st.markdown("---")
+                    <div style="padding: 10px; background: #1a1f2e; border-radius: 6px; margin: 5px 0; border-left: 3px solid {color};">
+                        <p style="margin: 0; font-weight: 600;">{art['source']}</p>
+                        <p style="margin: 5px 0; color: #9ca3af;">{art['title'][:100]}...</p>
+                    </div>
+                    """, unsafe_allow_html=True)
             else:
-                st.info("Ingen relevante nyheder fundet")
+                st.info("No recent news found")
 
-        # Stock Info
-        if stock_info:
+        # Company info
+        if stock_info and market == "Stocks":
             st.markdown("---")
-            st.subheader("📊 Aktie Information")
-            info_cols = st.columns(4)
+            st.markdown("### COMPANY INFO")
+            info_cols = st.columns(5)
             with info_cols[0]:
-                st.metric("Sektor", stock_info.get('sector', 'N/A'))
+                st.metric("Sector", stock_info.get('sector', 'N/A'))
             with info_cols[1]:
                 pe = stock_info.get('pe_ratio', 0)
-                st.metric("P/E Ratio", f"{pe:.1f}" if pe else "N/A")
+                st.metric("P/E", f"{pe:.1f}" if pe else "N/A")
             with info_cols[2]:
-                st.metric("52u Høj", f"${stock_info.get('52w_high', 0):,.2f}")
+                mc = stock_info.get('market_cap', 0)
+                st.metric("Market Cap", f"${mc/1e9:.1f}B" if mc else "N/A")
             with info_cols[3]:
-                st.metric("52u Lav", f"${stock_info.get('52w_low', 0):,.2f}")
+                st.metric("52W High", f"${stock_info.get('52w_high', 0):,.2f}")
+            with info_cols[4]:
+                st.metric("52W Low", f"${stock_info.get('52w_low', 0):,.2f}")
 
-elif mode == "Industri Scanner":
-    st.subheader("🔍 Industri Scanner - Find de bedste muligheder")
+elif mode == "Scanner":
+    st.markdown("### SECTOR SCANNER")
 
-    if market == "Aktier":
-        industry = st.selectbox("Vælg industri at scanne", list(INDUSTRIES.keys()))
-        stocks_to_scan = INDUSTRIES[industry]
+    if market == "Stocks":
+        industry = st.selectbox("Select Sector", list(INDUSTRIES.keys()))
+        stocks = INDUSTRIES[industry]
     elif market == "Crypto":
         industry = "Crypto"
-        stocks_to_scan = CRYPTO_SYMBOLS
+        stocks = CRYPTO_SYMBOLS
     else:
         industry = "Forex"
-        stocks_to_scan = FOREX_PAIRS
+        stocks = FOREX_PAIRS
 
-    st.info(f"Scanner {len(stocks_to_scan)} symboler i {industry}...")
+    st.caption(f"Scanning {len(stocks)} symbols...")
 
-    if st.button("🚀 Start Scanner", type="primary"):
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-
-        def update_progress(progress):
-            progress_bar.progress(progress)
-            status_text.text(f"Scanner... {int(progress * 100)}%")
-
-        results = scan_industry(industry, stocks_to_scan, update_progress)
-
-        progress_bar.empty()
-        status_text.empty()
+    if st.button("START SCAN", type="primary"):
+        progress = st.progress(0)
+        results = scan_industry(stocks, lambda p: progress.progress(p))
+        progress.empty()
 
         if results:
             df = pd.DataFrame(results)
 
-            # Split by signal
-            buy_signals = df[df['Signal'] == 'KØB'].sort_values('Score', ascending=False)
-            sell_signals = df[df['Signal'] == 'SÆLG'].sort_values('Score', ascending=False)
-            wait_signals = df[df['Signal'] == 'NEUTRAL']
+            buy_df = df[df['Signal'] == 'BUY'].sort_values('Score', ascending=False)
+            sell_df = df[df['Signal'] == 'SELL'].sort_values('Score', ascending=False)
 
-            col1, col2, col3 = st.columns(3)
+            col1, col2 = st.columns(2)
 
             with col1:
-                st.success(f"### 🟢 KØB Signaler ({len(buy_signals)})")
-                if not buy_signals.empty:
-                    for _, row in buy_signals.head(10).iterrows():
-                        st.write(f"**{row['Symbol']}** - ${row['Pris']:.2f} ({row['Ændring']:+.1f}%)")
-                        st.caption(f"RSI: {row['RSI']:.0f} | Score: {row['Score']:.0f}%")
+                st.markdown(f"#### BUY SIGNALS ({len(buy_df)})")
+                if not buy_df.empty:
+                    for _, row in buy_df.head(10).iterrows():
+                        st.markdown(f"""
+                        <div style="padding: 10px; background: #1a1f2e; border-left: 3px solid #10b981; margin: 5px 0; border-radius: 4px;">
+                            <span style="font-weight: 600;">{row['Symbol']}</span>
+                            <span style="float: right; color: #10b981;">${row['Price']:.2f} ({row['Change']:+.1f}%)</span>
+                        </div>
+                        """, unsafe_allow_html=True)
 
             with col2:
-                st.error(f"### 🔴 SÆLG Signaler ({len(sell_signals)})")
-                if not sell_signals.empty:
-                    for _, row in sell_signals.head(10).iterrows():
-                        st.write(f"**{row['Symbol']}** - ${row['Pris']:.2f} ({row['Ændring']:+.1f}%)")
-                        st.caption(f"RSI: {row['RSI']:.0f} | Score: {row['Score']:.0f}%")
+                st.markdown(f"#### SELL SIGNALS ({len(sell_df)})")
+                if not sell_df.empty:
+                    for _, row in sell_df.head(10).iterrows():
+                        st.markdown(f"""
+                        <div style="padding: 10px; background: #1a1f2e; border-left: 3px solid #ef4444; margin: 5px 0; border-radius: 4px;">
+                            <span style="font-weight: 600;">{row['Symbol']}</span>
+                            <span style="float: right; color: #ef4444;">${row['Price']:.2f} ({row['Change']:+.1f}%)</span>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-            with col3:
-                st.warning(f"### 🟡 NEUTRAL ({len(wait_signals)})")
-                if not wait_signals.empty:
-                    for _, row in wait_signals.head(10).iterrows():
-                        st.write(f"**{row['Symbol']}** - ${row['Pris']:.2f} ({row['Ændring']:+.1f}%)")
+            st.markdown("---")
+            st.markdown("#### ALL RESULTS")
+            st.dataframe(df.style.format({'Price': '${:.2f}', 'Change': '{:+.2f}%', 'RSI': '{:.1f}', 'Score': '{:.0f}%'}), use_container_width=True)
 
-            # Full table
-            st.divider()
-            st.subheader("📊 Alle resultater")
+else:  # Market Overview
+    st.markdown("### MARKET OVERVIEW")
 
-            def color_signal(val):
-                if val == 'KØB':
-                    return 'background-color: green; color: white'
-                elif val == 'SÆLG':
-                    return 'background-color: red; color: white'
-                return ''
+    progress = st.progress(0)
+    industries = list(INDUSTRIES.items()) if market == "Stocks" else [("Crypto", CRYPTO_SYMBOLS[:10])]
 
-            styled_df = df.style.map(color_signal, subset=['Signal'])
-            styled_df = styled_df.format({
-                'Pris': '${:.2f}',
-                'Ændring': '{:+.2f}%',
-                'RSI': '{:.1f}',
-                'Score': '{:.0f}%'
-            })
-            st.dataframe(styled_df, use_container_width=True)
-
-else:  # Marked Oversigt
-    st.subheader("🌍 Marked Oversigt")
-
-    overview_data = []
-
-    progress_bar = st.progress(0)
-    industries_list = list(INDUSTRIES.items()) if market == "Aktier" else [("Crypto", CRYPTO_SYMBOLS[:10])]
-
-    for i, (ind_name, stocks) in enumerate(industries_list):
-        progress_bar.progress((i + 1) / len(industries_list))
-
-        buy_count = 0
-        sell_count = 0
-
-        for symbol in stocks[:5]:
+    overview = []
+    for i, (name, stocks) in enumerate(industries):
+        progress.progress((i + 1) / len(industries))
+        buy, sell = 0, 0
+        for sym in stocks[:5]:
             try:
-                data = fetch_stock_data(symbol)
+                data = fetch_stock_data(sym)
                 if data is not None and len(data) >= 50:
                     data = calculate_indicators(data)
-                    confluence = calculate_confluence_score(data, {}, None, 0, None, None)
-                    if confluence.get('signal') == "KØB":
-                        buy_count += 1
-                    elif confluence.get('signal') == "SÆLG":
-                        sell_count += 1
+                    conf = calculate_confluence(data, None, 0, None, None)
+                    if conf['signal'] == 'BUY': buy += 1
+                    elif conf['signal'] == 'SELL': sell += 1
             except:
                 continue
+        overview.append({'Sector': name, 'Buy': buy, 'Sell': sell, 'Sentiment': 'Bullish' if buy > sell else 'Bearish' if sell > buy else 'Neutral'})
 
-        overview_data.append({
-            'Industri': ind_name,
-            'KØB': buy_count,
-            'SÆLG': sell_count,
-            'Sentiment': '🟢' if buy_count > sell_count else '🔴' if sell_count > buy_count else '🟡'
-        })
+    progress.empty()
 
-    progress_bar.empty()
+    df = pd.DataFrame(overview)
 
-    if overview_data:
-        df = pd.DataFrame(overview_data)
-        st.dataframe(df, use_container_width=True)
+    fig = go.Figure()
+    fig.add_trace(go.Bar(name='Buy', x=df['Sector'], y=df['Buy'], marker_color='#10b981'))
+    fig.add_trace(go.Bar(name='Sell', x=df['Sector'], y=df['Sell'], marker_color='#ef4444'))
+    fig.update_layout(barmode='group', height=400, template='plotly_dark', paper_bgcolor='#0e1117', plot_bgcolor='#0e1117')
+    st.plotly_chart(fig, use_container_width=True)
 
-        # Visual chart
-        fig = go.Figure()
-        fig.add_trace(go.Bar(name='KØB', x=df['Industri'], y=df['KØB'], marker_color='green'))
-        fig.add_trace(go.Bar(name='SÆLG', x=df['Industri'], y=df['SÆLG'], marker_color='red'))
-        fig.update_layout(barmode='group', height=400, template='plotly_dark')
-        st.plotly_chart(fig, use_container_width=True)
+    st.dataframe(df, use_container_width=True)
 
 # Auto-refresh
 if auto_refresh:
     time.sleep(REFRESH_INTERVAL)
     st.rerun()
-
-# Footer
-st.sidebar.markdown("---")
-st.sidebar.caption("Multi-Source Confluence Analysis")
-st.sidebar.caption("Data: Yahoo Finance, TradingView, RSS News")
-st.sidebar.caption(f"Aktier: {len(ALL_STOCKS)} | Crypto: {len(CRYPTO_SYMBOLS)}")
