@@ -131,7 +131,52 @@ st.markdown("""
     .bullish { color: #10b981; }
     .bearish { color: #ef4444; }
     .neutral { color: #f59e0b; }
+
+    /* Watermark - always visible */
+    .watermark {
+        position: fixed !important;
+        top: 70px !important;
+        left: 25px !important;
+        z-index: 999999 !important;
+        background: linear-gradient(135deg, #1a1f2e 0%, #0e1117 100%);
+        border: 2px solid #3b82f6;
+        border-radius: 10px;
+        padding: 15px 25px;
+        box-shadow: 0 4px 25px rgba(59, 130, 246, 0.4);
+    }
+    .watermark-subtitle {
+        margin: 0;
+        font-size: 10px;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+    }
+    .watermark-name {
+        margin: 2px 0;
+        font-size: 20px;
+        font-weight: 700;
+        background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .watermark-title {
+        margin: 0;
+        font-size: 16px;
+        color: #f59e0b;
+        font-weight: 700;
+        letter-spacing: 2px;
+    }
 </style>
+""", unsafe_allow_html=True)
+
+# Watermark - ALWAYS visible on ALL pages including login
+st.markdown("""
+<div class="watermark">
+    <p class="watermark-subtitle">Created by</p>
+    <p class="watermark-name">Theodor Hauch's</p>
+    <p class="watermark-title">AKTIE MAGI</p>
+</div>
 """, unsafe_allow_html=True)
 
 # ===== PASSWORD PROTECTION =====
@@ -591,25 +636,6 @@ def scan_industry(stocks, progress_cb=None):
     return results
 
 # ===== UI =====
-
-# Watermark - always visible top left
-st.markdown("""
-<div style="position: fixed; top: 60px; left: 20px; z-index: 9999; pointer-events: none;">
-    <div style="background: linear-gradient(135deg, #1a1f2e 0%, #0e1117 100%);
-                border: 2px solid #3b82f6;
-                border-radius: 8px;
-                padding: 12px 20px;
-                box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);">
-        <p style="margin: 0; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 2px;">Created by</p>
-        <h3 style="margin: 0; font-size: 18px; font-weight: 700;
-                   background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-                   -webkit-background-clip: text;
-                   -webkit-text-fill-color: transparent;
-                   background-clip: text;">Theodor Hauch's</h3>
-        <p style="margin: 0; font-size: 14px; color: #f59e0b; font-weight: 600; letter-spacing: 1px;">AKTIE MAGI</p>
-    </div>
-</div>
-""", unsafe_allow_html=True)
 
 # Header
 st.markdown("""
