@@ -25,8 +25,8 @@ TECH_STOCKS = [
     "CRM", "ORCL", "ADBE", "NOW", "INTU", "SNOW", "PLTR", "PANW", "CRWD", "ZS",
     "DDOG", "NET", "MDB", "TEAM", "OKTA", "HUBS", "VEEV", "WDAY", "FTNT",
     # Cloud & Internet
-    "SHOP", "SQ", "PYPL", "SPOT", "UBER", "LYFT", "ABNB", "DASH", "RBLX", "U",
-    "SNAP", "PINS", "TWLO", "ZM", "DOCU", "DBX", "BOX",
+    "SHOP", "PYPL", "SPOT", "UBER", "LYFT", "ABNB", "DASH", "RBLX", "U",
+    "SNAP", "PINS", "TWLO", "ZM", "DOCU", "DBX", "BOX", "PATH",
     # Hardware
     "DELL", "HPQ", "HPE", "LOGI", "WDC", "STX",
 ]
@@ -36,12 +36,12 @@ HEALTHCARE_STOCKS = [
     "JNJ", "PFE", "MRK", "ABBV", "LLY", "BMY", "AMGN", "GILD", "REGN", "VRTX",
     "BIIB", "MRNA", "BNTX", "AZN", "NVO", "GSK", "SNY", "NVS",
     # Medical Devices
-    "MDT", "ABT", "SYK", "ISRG", "BSX", "EW", "ZBH", "DXCM", "ALGN", "HOLX",
-    "IDXX", "BDX", "BAX", "TMO", "DHR", "A", "ILMN",
+    "MDT", "ABT", "SYK", "ISRG", "BSX", "EW", "ZBH", "DXCM", "ALGN",
+    "IDXX", "BDX", "BAX", "TMO", "DHR", "A", "ILMN", "PODD",
     # Health Insurance
     "UNH", "CVS", "CI", "HUM", "CNC", "HCA",
     # Biotech
-    "SGEN", "ALNY", "SRPT", "BMRN", "IONS", "NBIX", "EXEL",
+    "ALNY", "SRPT", "BMRN", "IONS", "NBIX", "EXEL", "RXRX",
 ]
 
 FINANCE_STOCKS = [
@@ -53,17 +53,17 @@ FINANCE_STOCKS = [
     # Insurance
     "BRK-B", "AIG", "MET", "PRU", "ALL", "TRV", "CB", "PGR", "AFL", "HIG",
     # Fintech & Payments
-    "V", "MA", "AXP", "DFS", "COF", "SYF", "ALLY", "SOFI", "AFRM", "UPST",
+    "V", "MA", "AXP", "COF", "SYF", "ALLY", "SOFI", "AFRM", "UPST", "NU",
     # Exchanges
     "CME", "ICE", "NDAQ", "CBOE", "COIN",
 ]
 
 ENERGY_STOCKS = [
     # Oil Majors
-    "XOM", "CVX", "COP", "EOG", "PXD", "OXY", "MPC", "VLO", "PSX", "HES",
-    "DVN", "FANG", "APA", "HAL", "SLB", "BKR",
+    "XOM", "CVX", "COP", "EOG", "OXY", "MPC", "VLO", "PSX",
+    "DVN", "FANG", "APA", "HAL", "SLB", "BKR", "MRO", "TPL",
     # Natural Gas
-    "LNG", "EQT", "AR", "RRC", "SWN",
+    "LNG", "EQT", "AR", "RRC", "CTRA",
     # Renewables
     "NEE", "ENPH", "SEDG", "FSLR", "RUN", "PLUG", "BE",
     # Utilities
@@ -73,12 +73,12 @@ ENERGY_STOCKS = [
 CONSUMER_STOCKS = [
     # Retail
     "WMT", "COST", "TGT", "HD", "LOW", "DG", "DLTR", "ROST", "TJX", "BBY",
-    "ULTA", "LULU", "GPS", "ANF", "AEO",
+    "ULTA", "LULU", "ANF", "AEO", "BURL",
     # E-commerce
     "EBAY", "ETSY", "W", "CHWY",
     # Consumer Products
-    "PG", "KO", "PEP", "MNST", "KDP", "KHC", "GIS", "K", "CPB",
-    "HSY", "MDLZ", "CL", "CLX", "CHD", "EL",
+    "PG", "KO", "PEP", "MNST", "KDP", "KHC", "GIS", "CPB",
+    "HSY", "MDLZ", "CL", "CLX", "CHD", "EL", "SJM",
     # Restaurants
     "MCD", "SBUX", "CMG", "YUM", "DRI", "SHAK", "WING",
     # Apparel
@@ -102,14 +102,14 @@ COMMUNICATION_STOCKS = [
     # Telecom
     "T", "VZ", "TMUS",
     # Media
-    "DIS", "NFLX", "CMCSA", "WBD", "PARA", "FOX", "LYV",
+    "DIS", "NFLX", "CMCSA", "WBD", "FOX", "LYV", "ROKU",
     # Gaming
-    "EA", "ATVI", "TTWO", "DKNG", "PENN", "MGM", "CZR", "WYNN", "LVS",
+    "EA", "TTWO", "DKNG", "PENN", "MGM", "CZR", "WYNN", "LVS", "GLBE",
 ]
 
 MATERIALS_STOCKS = [
     # Mining
-    "NEM", "FCX", "AA", "CLF", "X", "NUE", "STLD",
+    "NEM", "FCX", "AA", "CLF", "NUE", "STLD", "RS",
     # Chemicals
     "LIN", "APD", "ECL", "DD", "DOW", "PPG", "ALB", "EMN",
     "FMC", "MOS", "CF", "NTR",
@@ -143,11 +143,12 @@ INDUSTRIES = {
 # ===== CRYPTO (Yahoo Finance format) =====
 CRYPTO_SYMBOLS = [
     "BTC-USD", "ETH-USD", "BNB-USD", "XRP-USD", "ADA-USD", "SOL-USD",
-    "DOGE-USD", "DOT-USD", "MATIC-USD", "SHIB-USD", "TRX-USD", "AVAX-USD",
-    "LINK-USD", "ATOM-USD", "UNI-USD", "LTC-USD", "ETC-USD", "XLM-USD",
-    "BCH-USD", "FIL-USD", "NEAR-USD", "APT-USD", "ARB-USD", "OP-USD",
-    "AAVE-USD", "MKR-USD", "GRT-USD", "LDO-USD", "CRV-USD", "FTM-USD",
+    "DOGE-USD", "DOT-USD", "SHIB-USD", "TRX-USD", "AVAX-USD",
+    "LINK-USD", "ATOM-USD", "LTC-USD", "ETC-USD", "XLM-USD",
+    "BCH-USD", "FIL-USD", "NEAR-USD", "ARB-USD", "OP-USD",
+    "AAVE-USD", "MKR-USD", "LDO-USD", "CRV-USD", "POL-USD",
     "ALGO-USD", "SAND-USD", "MANA-USD", "AXS-USD", "GALA-USD", "ENJ-USD",
+    "INJ-USD", "SEI-USD", "SUI-USD", "PEPE-USD", "WIF-USD",
 ]
 
 # ===== FOREX =====
