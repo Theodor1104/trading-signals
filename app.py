@@ -136,7 +136,7 @@ st.markdown("""
     .watermark {
         position: fixed !important;
         top: 40px !important;
-        left: 260px !important;
+        left: 200px !important;
         z-index: 999999 !important;
         background: transparent !important;
         border: none;
