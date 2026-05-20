@@ -135,8 +135,8 @@ st.markdown("""
     /* Watermark - large, transparent, aligned with nav */
     .watermark {
         position: fixed !important;
-        top: 80px !important;
-        left: 380px !important;
+        top: 40px !important;
+        left: 320px !important;
         z-index: 999999 !important;
         background: transparent !important;
         border: none;
