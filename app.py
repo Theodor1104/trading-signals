@@ -80,6 +80,28 @@ from config import (
     NEWS_RSS_FEEDS, API_ENDPOINTS, REFRESH_INTERVAL, COMPANY_NAMES
 )
 
+# ===== CURRENCY HELPER =====
+def get_currency(symbol):
+    """Get currency symbol based on stock symbol"""
+    if symbol.endswith('.CO'):
+        return 'kr'  # Danish Krone
+    elif symbol.endswith('.L'):
+        return '£'   # British Pound
+    elif '=X' in symbol:
+        return ''    # Forex - no symbol
+    else:
+        return '$'   # USD (US stocks, Crypto)
+
+def format_price(price, symbol):
+    """Format price with correct currency"""
+    currency = get_currency(symbol)
+    if currency == 'kr':
+        return f"{price:,.2f} kr"
+    elif currency == '£':
+        return f"£{price:,.2f}"
+    else:
+        return f"${price:,.2f}"
+
 # ===== SEARCH FUNCTION =====
 def search_symbols(query, market="Stocks"):
     """Search for symbols by name or symbol"""
@@ -1073,7 +1095,7 @@ def render_full_panel(symbol, panel_id=0, is_compact=False):
             <span style="font-size: 18px; font-weight: 700; color: {signal_color}; background: rgba(0,0,0,0.3); padding: 5px 15px; border-radius: 20px;">{signal} {score:.0f}%</span>
         </div>
         <div style="margin-top: 10px;">
-            <span style="font-size: 28px; font-weight: 700; color: #fff;">${price:.2f}</span>
+            <span style="font-size: 28px; font-weight: 700; color: #fff;">{format_price(price, symbol)}</span>
             <span style="font-size: 16px; font-weight: 600; color: {'#10b981' if change >= 0 else '#ef4444'}; margin-left: 15px;">{change:+.2f}%</span>
         </div>
     </div>
@@ -1322,7 +1344,7 @@ if mode == "Dashboard":
                     with col_o1:
                         st.markdown(f"**{opp['symbol']}** {conf_badge}")
                     with col_o2:
-                        st.markdown(f"${opp['price']:.2f}")
+                        st.markdown(format_price(opp['price'], opp['symbol']))
                     with col_o3:
                         chg_color = "#10b981" if opp['change'] >= 0 else "#ef4444"
                         st.markdown(f"<span style='color:{chg_color}'>{opp['change']:+.1f}%</span>", unsafe_allow_html=True)
@@ -1352,7 +1374,7 @@ if mode == "Dashboard":
                         with col_s1:
                             st.markdown(f"**{sig['symbol']}**")
                         with col_s2:
-                            st.markdown(f"${sig['price']:.2f}")
+                            st.markdown(format_price(sig['price'], sig['symbol']))
                         with col_s3:
                             st.markdown(f"<span style='color:#ef4444'>SELL {sig['score']:.0f}%</span>", unsafe_allow_html=True)
                         with col_s4:
@@ -1398,7 +1420,7 @@ if mode == "Dashboard":
                         with col_w1:
                             st.markdown(f"**{item['symbol']}**")
                         with col_w2:
-                            st.markdown(f"${item['price']:.2f}")
+                            st.markdown(format_price(item['price'], item['symbol']))
                         with col_w3:
                             st.markdown(f"<span style='color:{chg_color}'>{item['change']:+.2f}%</span>", unsafe_allow_html=True)
                         with col_w4:
@@ -1523,7 +1545,7 @@ elif mode == "Analysis":
                         <p style="margin: 0; font-size: 14px; color: #6b7280; text-transform: uppercase; letter-spacing: 2px;">{symbol} {('| ' + sector) if sector else ''}</p>
                         <h1 style="margin: 8px 0; font-size: 32px; font-weight: 800; color: #fff;">{company_name}</h1>
                         <div style="margin-top: 10px;">
-                            <span style="font-size: 36px; font-weight: 700; color: #fff;">${price:,.2f}</span>
+                            <span style="font-size: 36px; font-weight: 700; color: #fff;">{format_price(price, symbol)}</span>
                             <span style="font-size: 18px; font-weight: 600; color: {'#10b981' if change >= 0 else '#ef4444'}; margin-left: 15px;">{change:+.2f}%</span>
                         </div>
                     </div>
@@ -2165,7 +2187,7 @@ elif mode == "Market Overview":
                                 st.markdown(f"""
                                 <div style="padding: 8px 12px; background: #1a1f2e; border-left: 3px solid #10b981; margin: 4px 0; border-radius: 4px;">
                                     <span style="font-weight: 600; color: #fff;">{stock['symbol']}</span>
-                                    <span style="float: right; color: #10b981;">${stock['price']:.2f} ({stock['change']:+.1f}%)</span>
+                                    <span style="float: right; color: #10b981;">{format_price(stock['price'], stock['symbol'])} ({stock['change']:+.1f}%)</span>
                                     <br><span style="font-size: 12px; color: #9ca3af;">RSI: {stock['rsi']:.1f} | Score: {stock['score']:.0f}%</span>
                                 </div>
                                 """, unsafe_allow_html=True)
@@ -2176,7 +2198,7 @@ elif mode == "Market Overview":
                                 st.markdown(f"""
                                 <div style="padding: 8px 12px; background: #1a1f2e; border-left: 3px solid #ef4444; margin: 4px 0; border-radius: 4px;">
                                     <span style="font-weight: 600; color: #fff;">{stock['symbol']}</span>
-                                    <span style="float: right; color: #ef4444;">${stock['price']:.2f} ({stock['change']:+.1f}%)</span>
+                                    <span style="float: right; color: #ef4444;">{format_price(stock['price'], stock['symbol'])} ({stock['change']:+.1f}%)</span>
                                     <br><span style="font-size: 12px; color: #9ca3af;">RSI: {stock['rsi']:.1f} | Score: {stock['score']:.0f}%</span>
                                 </div>
                                 """, unsafe_allow_html=True)
@@ -2307,7 +2329,7 @@ elif mode == "Portfolio":
                     with col_w1:
                         st.markdown(f"**{item['symbol']}**")
                     with col_w2:
-                        st.markdown(f"${price:,.2f}")
+                        st.markdown(format_price(price, item['symbol']))
                     with col_w3:
                         delta_color = "#10b981" if change >= 0 else "#ef4444"
                         st.markdown(f"<span style='color: {delta_color}'>{change:+.2f}%</span>", unsafe_allow_html=True)
@@ -2445,11 +2467,17 @@ elif mode == "Portfolio":
                 with col_t2:
                     st.markdown(f"{h['quantity']:.2f}")
                 with col_t3:
-                    st.markdown(f"${h['avg_price']:.2f}")
+                    st.markdown(format_price(h['avg_price'], h['symbol']))
                 with col_t4:
-                    st.markdown(f"${h['current_price']:.2f}")
+                    st.markdown(format_price(h['current_price'], h['symbol']))
                 with col_t5:
-                    st.markdown(f"<span style='color: {pnl_color}'>${h['pnl']:+,.2f} ({h['pnl_pct']:+.2f}%)</span>", unsafe_allow_html=True)
+                    currency = get_currency(h['symbol'])
+                    if currency == 'kr':
+                        st.markdown(f"<span style='color: {pnl_color}'>{h['pnl']:+,.2f} kr ({h['pnl_pct']:+.2f}%)</span>", unsafe_allow_html=True)
+                    elif currency == '£':
+                        st.markdown(f"<span style='color: {pnl_color}'>£{h['pnl']:+,.2f} ({h['pnl_pct']:+.2f}%)</span>", unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"<span style='color: {pnl_color}'>${h['pnl']:+,.2f} ({h['pnl_pct']:+.2f}%)</span>", unsafe_allow_html=True)
                 with col_t6:
                     if st.button("Sell", key=f"sell_{h['id']}"):
                         db.remove_holding(h['id'])
@@ -2988,7 +3016,7 @@ elif mode == "Calendar":
                 with col_sig2:
                     st.markdown(f"<span style='color: {signal_color}'>{sig['signal']} {sig['score']:.0f}%</span>", unsafe_allow_html=True)
                 with col_sig3:
-                    st.markdown(f"${sig['price']:.2f}")
+                    st.markdown(format_price(sig['price'], sig['symbol']))
                 with col_sig4:
                     st.caption(f"{sig['timestamp'][:10]}{result_icon}")
         else:
