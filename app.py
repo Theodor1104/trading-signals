@@ -46,6 +46,10 @@ except ImportError:
 # Initialize database
 db = JournalDB()
 
+# Set default SMS number for alerts if not already set
+if not db.get_setting('twilio_to'):
+    db.set_setting('twilio_to', '+45 53 89 11 04')
+
 # TradingView Technical Analysis
 try:
     from tradingview_ta import TA_Handler, Interval, Exchange
@@ -55,8 +59,58 @@ except ImportError:
 
 from config import (
     INDUSTRIES, ALL_STOCKS, CRYPTO_SYMBOLS, FOREX_PAIRS,
-    NEWS_RSS_FEEDS, API_ENDPOINTS, REFRESH_INTERVAL
+    NEWS_RSS_FEEDS, API_ENDPOINTS, REFRESH_INTERVAL, COMPANY_NAMES
 )
+
+# ===== SEARCH FUNCTION =====
+def search_symbols(query, market="Stocks"):
+    """Search for symbols by name or symbol"""
+    if not query or len(query) < 1:
+        return []
+
+    query = query.upper().strip()
+    query_lower = query.lower()
+    results = []
+
+    # Get symbols based on market
+    if market == "Stocks":
+        symbols = ALL_STOCKS
+    elif market == "Crypto":
+        symbols = CRYPTO_SYMBOLS
+    else:
+        symbols = FOREX_PAIRS
+
+    for sym in symbols:
+        # Check symbol match
+        if query in sym.upper():
+            name = COMPANY_NAMES.get(sym, sym)
+            results.append({"symbol": sym, "name": name, "match": "symbol"})
+        # Check name match
+        elif sym in COMPANY_NAMES:
+            if query_lower in COMPANY_NAMES[sym].lower():
+                results.append({"symbol": sym, "name": COMPANY_NAMES[sym], "match": "name"})
+
+    # Sort: exact symbol matches first, then by symbol length
+    results.sort(key=lambda x: (0 if x['match'] == 'symbol' and x['symbol'].startswith(query) else 1, len(x['symbol'])))
+    return results[:15]  # Limit to 15 results
+
+def get_all_searchable_symbols(market="Stocks"):
+    """Get all symbols with their names for dropdown"""
+    if market == "Stocks":
+        symbols = ALL_STOCKS
+    elif market == "Crypto":
+        symbols = CRYPTO_SYMBOLS
+    else:
+        symbols = FOREX_PAIRS
+
+    options = []
+    for sym in symbols:
+        name = COMPANY_NAMES.get(sym, "")
+        if name:
+            options.append(f"{sym} - {name}")
+        else:
+            options.append(sym)
+    return sorted(options)
 
 # Page config
 st.set_page_config(
@@ -2202,15 +2256,24 @@ elif mode == "Portfolio":
         st.markdown("#### MY WATCHLIST")
 
         # Add to watchlist
-        col_add1, col_add2, col_add3 = st.columns([3, 2, 1])
-        with col_add1:
-            new_symbol = st.text_input("Add symbol", placeholder="e.g. AAPL", label_visibility="collapsed")
+        col_add1, col_add2, col_add3 = st.columns([2, 2, 1])
         with col_add2:
             add_market = st.selectbox("Market", ["Stocks", "Crypto", "Forex"], key="watchlist_market", label_visibility="collapsed")
+        with col_add1:
+            # Get searchable options based on market
+            search_options = get_all_searchable_symbols(add_market)
+            selected_option = st.selectbox(
+                "Search symbol or company name",
+                options=[""] + search_options,
+                key="watchlist_symbol_search",
+                label_visibility="collapsed",
+                placeholder="Type to search (e.g. Apple, AAPL)..."
+            )
         with col_add3:
             if st.button("Add", type="primary"):
-                if new_symbol:
-                    symbol_upper = new_symbol.upper().strip()
+                if selected_option:
+                    # Extract symbol from "SYMBOL - Company Name" format
+                    symbol_upper = selected_option.split(" - ")[0].strip().upper()
                     if add_market == "Crypto" and not symbol_upper.endswith("-USD"):
                         symbol_upper = f"{symbol_upper}-USD"
                     if db.add_to_watchlist(symbol_upper, add_market):
@@ -2274,19 +2337,27 @@ elif mode == "Portfolio":
 
         # Add holding
         st.markdown("**Add Position**")
-        col_h1, col_h2, col_h3, col_h4, col_h5 = st.columns([2, 1.5, 1.5, 1.5, 1])
+        col_h0, col_h1, col_h2, col_h3, col_h4 = st.columns([1.5, 2.5, 1.5, 1.5, 1])
+        with col_h0:
+            hold_market = st.selectbox("Market", ["Stocks", "Crypto", "Forex"], key="hold_market", label_visibility="collapsed")
         with col_h1:
-            hold_symbol = st.text_input("Symbol", placeholder="AAPL", key="hold_sym", label_visibility="collapsed")
+            # Searchable symbol dropdown
+            hold_options = get_all_searchable_symbols(hold_market)
+            hold_selected = st.selectbox(
+                "Search symbol",
+                options=[""] + hold_options,
+                key="hold_sym_search",
+                label_visibility="collapsed",
+                placeholder="Type to search..."
+            )
         with col_h2:
             hold_qty = st.number_input("Shares", min_value=0.0, step=1.0, key="hold_qty", label_visibility="collapsed")
         with col_h3:
             hold_price = st.number_input("Avg Price", min_value=0.0, step=0.01, key="hold_price", label_visibility="collapsed")
         with col_h4:
-            hold_market = st.selectbox("Market", ["Stocks", "Crypto", "Forex"], key="hold_market", label_visibility="collapsed")
-        with col_h5:
             if st.button("Add", key="add_holding", type="primary"):
-                if hold_symbol and hold_qty > 0 and hold_price > 0:
-                    symbol_upper = hold_symbol.upper().strip()
+                if hold_selected and hold_qty > 0 and hold_price > 0:
+                    symbol_upper = hold_selected.split(" - ")[0].strip().upper()
                     if hold_market == "Crypto" and not symbol_upper.endswith("-USD"):
                         symbol_upper = f"{symbol_upper}-USD"
                     db.add_holding(symbol_upper, hold_market, hold_qty, hold_price)
