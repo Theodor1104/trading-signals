@@ -47,7 +47,7 @@ SCAN_STOCKS = [
 ]
 
 # Minimum score to be considered a golden opportunity
-GOLDEN_THRESHOLD = 95
+GOLDEN_THRESHOLD = 99
 
 def log(message):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
