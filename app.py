@@ -692,7 +692,7 @@ def scan_industry(stocks, progress_cb=None):
         time.sleep(0.1)
     return results
 
-def render_compact_analysis(symbol, container, compact=False):
+def render_compact_analysis(symbol, container, compact=False, panel_id=0):
     """Render a compact stock analysis panel"""
     with container:
         data = fetch_stock_data(symbol, period="3mo")
@@ -786,7 +786,7 @@ def render_compact_analysis(symbol, container, compact=False):
         fig.update_xaxes(showticklabels=False)
         fig.update_yaxes(showticklabels=True, tickfont=dict(size=9))
 
-        st.plotly_chart(fig, use_container_width=True, key=f"chart_{symbol}")
+        st.plotly_chart(fig, use_container_width=True, key=f"chart_{symbol}_{panel_id}")
 
 # ===== UI =====
 
@@ -867,17 +867,17 @@ if mode == "Analysis":
             if num_panels == 2:
                 chart_cols = st.columns(2)
                 for i, sym in enumerate(symbols_selected):
-                    render_compact_analysis(sym, chart_cols[i], compact=True)
+                    render_compact_analysis(sym, chart_cols[i], compact=True, panel_id=i)
             else:  # 4-split
                 # First row
                 row1_cols = st.columns(2)
-                render_compact_analysis(symbols_selected[0], row1_cols[0], compact=True)
-                render_compact_analysis(symbols_selected[1], row1_cols[1], compact=True)
+                render_compact_analysis(symbols_selected[0], row1_cols[0], compact=True, panel_id=0)
+                render_compact_analysis(symbols_selected[1], row1_cols[1], compact=True, panel_id=1)
 
                 # Second row
                 row2_cols = st.columns(2)
-                render_compact_analysis(symbols_selected[2], row2_cols[0], compact=True)
-                render_compact_analysis(symbols_selected[3], row2_cols[1], compact=True)
+                render_compact_analysis(symbols_selected[2], row2_cols[0], compact=True, panel_id=2)
+                render_compact_analysis(symbols_selected[3], row2_cols[1], compact=True, panel_id=3)
 
     else:
         # Normal single view
