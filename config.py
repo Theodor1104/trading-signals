@@ -120,11 +120,25 @@ REAL_ESTATE_STOCKS = [
     "EQR", "VTR", "ARE", "BXP", "KIM", "REG", "HST", "MAA", "UDR", "ESS",
 ]
 
+# ===== DANISH STOCKS (Copenhagen Stock Exchange) =====
+DANISH_STOCKS = [
+    # Large Cap
+    "NOVO-B.CO", "MAERSK-B.CO", "DSV.CO", "VWS.CO", "ORSTED.CO",
+    "CARL-B.CO", "PNDORA.CO", "COLO-B.CO", "GMAB.CO", "DEMANT.CO",
+    # Finance
+    "DANSKE.CO", "TRYG.CO", "JYSK.CO",
+    # Industrial
+    "ROCK-B.CO", "FLS.CO", "ISS.CO", "GN.CO", "AMBU-B.CO",
+    # Other
+    "RBREW.CO", "NNIT.CO", "NETC.CO", "CHEMM.CO",
+    "RILBA.CO", "MATAS.CO", "ALK-B.CO", "BAVA.CO",
+]
+
 # All stocks combined
 ALL_STOCKS = (
     TECH_STOCKS + HEALTHCARE_STOCKS + FINANCE_STOCKS + ENERGY_STOCKS +
     CONSUMER_STOCKS + INDUSTRIAL_STOCKS + COMMUNICATION_STOCKS +
-    MATERIALS_STOCKS + REAL_ESTATE_STOCKS
+    MATERIALS_STOCKS + REAL_ESTATE_STOCKS + DANISH_STOCKS
 )
 
 # Industry mapping
@@ -138,6 +152,7 @@ INDUSTRIES = {
     "Communication": COMMUNICATION_STOCKS,
     "Materials": MATERIALS_STOCKS,
     "Real Estate": REAL_ESTATE_STOCKS,
+    "Danish": DANISH_STOCKS,
 }
 
 # ===== CRYPTO (Yahoo Finance format) =====

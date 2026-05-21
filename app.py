@@ -692,101 +692,125 @@ def scan_industry(stocks, progress_cb=None):
         time.sleep(0.1)
     return results
 
-def render_compact_analysis(symbol, container, compact=False, panel_id=0):
-    """Render a compact stock analysis panel"""
-    with container:
-        data = fetch_stock_data(symbol, period="3mo")
-        if data is None or len(data) < 50:
-            st.error(f"No data for {symbol}")
-            return
+def render_full_panel(symbol, panel_id=0, is_compact=False):
+    """Render a full analysis panel for split view"""
+    data = fetch_stock_data(symbol, period="3mo")
+    if data is None or len(data) < 50:
+        st.error(f"No data for {symbol}")
+        return
 
-        data = calculate_indicators(data)
-        latest = data.iloc[-1]
-        prev = data.iloc[-2]
-        price = latest['close']
-        change = ((price / prev['close']) - 1) * 100
+    data = calculate_indicators(data)
+    latest = data.iloc[-1]
+    prev = data.iloc[-2]
+    price = latest['close']
+    change = ((price / prev['close']) - 1) * 100
 
-        # Quick confluence
-        confluence = calculate_confluence(data, None, 0, None, None)
-        signal = confluence['signal']
-        score = confluence['score']
+    # Get analysis data
+    confluence = calculate_confluence(data, None, 0, None, None)
+    signal = confluence['signal']
+    score = confluence['score']
+    risk = calculate_risk(data)
 
-        # Header with signal
-        signal_color = "#10b981" if signal == "BUY" else "#ef4444" if signal == "SELL" else "#f59e0b"
-        st.markdown(f"""
-        <div style="background: #1a1f2e; padding: 12px; border-radius: 8px; border-left: 4px solid {signal_color}; margin-bottom: 10px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 18px; font-weight: 700; color: #fff;">{symbol}</span>
-                <span style="font-size: 14px; font-weight: 600; color: {signal_color};">{signal} ({score:.0f}%)</span>
-            </div>
-            <div style="margin-top: 5px;">
-                <span style="font-size: 20px; color: #fff;">${price:.2f}</span>
-                <span style="font-size: 14px; color: {'#10b981' if change >= 0 else '#ef4444'}; margin-left: 10px;">{change:+.2f}%</span>
-            </div>
+    # Header with signal
+    signal_color = "#10b981" if signal == "BUY" else "#ef4444" if signal == "SELL" else "#f59e0b"
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #1a1f2e 0%, #151922 100%); padding: 15px; border-radius: 10px; border-left: 5px solid {signal_color}; margin-bottom: 15px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 24px; font-weight: 800; color: #fff;">{symbol}</span>
+            <span style="font-size: 18px; font-weight: 700; color: {signal_color}; background: rgba(0,0,0,0.3); padding: 5px 15px; border-radius: 20px;">{signal} {score:.0f}%</span>
         </div>
-        """, unsafe_allow_html=True)
+        <div style="margin-top: 8px;">
+            <span style="font-size: 28px; font-weight: 700; color: #fff;">${price:.2f}</span>
+            <span style="font-size: 16px; font-weight: 600; color: {'#10b981' if change >= 0 else '#ef4444'}; margin-left: 15px;">{change:+.2f}%</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        # Metrics row
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            rsi = latest.get('rsi', 0)
-            rsi_color = "#10b981" if rsi < 30 else "#ef4444" if rsi > 70 else "#9ca3af"
-            st.markdown(f"<p style='margin:0;color:#6b7280;font-size:11px;'>RSI</p><p style='margin:0;font-size:16px;color:{rsi_color};'>{rsi:.1f}</p>", unsafe_allow_html=True)
-        with col2:
-            macd_h = latest.get('macd_hist', 0)
-            macd_color = "#10b981" if macd_h > 0 else "#ef4444"
-            st.markdown(f"<p style='margin:0;color:#6b7280;font-size:11px;'>MACD</p><p style='margin:0;font-size:16px;color:{macd_color};'>{'Bullish' if macd_h > 0 else 'Bearish'}</p>", unsafe_allow_html=True)
-        with col3:
-            vol = latest.get('volatility_20', 0) if 'volatility_20' in latest else 0
-            st.markdown(f"<p style='margin:0;color:#6b7280;font-size:11px;'>Volatility</p><p style='margin:0;font-size:16px;color:#9ca3af;'>{vol:.1f}%</p>", unsafe_allow_html=True)
+    # Key metrics
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        rsi = latest.get('rsi', 0)
+        rsi_status = "Oversold" if rsi < 30 else "Overbought" if rsi > 70 else "Neutral"
+        st.metric("RSI (14)", f"{rsi:.1f}", rsi_status)
+    with m2:
+        macd_h = latest.get('macd_hist', 0)
+        st.metric("MACD", "Bullish" if macd_h > 0 else "Bearish")
+    with m3:
+        if risk:
+            st.metric("Volatility", f"{risk['volatility']:.1f}%")
+    with m4:
+        adx = latest.get('adx', 0)
+        st.metric("ADX", f"{adx:.1f}", "Strong" if adx > 25 else "Weak")
 
-        # Compact chart
-        chart_height = 200 if compact else 300
-        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08, row_heights=[0.7, 0.3])
+    # Chart with tabs
+    chart_height = 250 if is_compact else 350
+    tab_chart, tab_ind, tab_levels = st.tabs(["Chart", "Indicators", "Levels"])
+
+    with tab_chart:
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05, row_heights=[0.75, 0.25])
 
         # Candlestick
         fig.add_trace(go.Candlestick(
-            x=data.index[-50:],
-            open=data['open'][-50:],
-            high=data['high'][-50:],
-            low=data['low'][-50:],
-            close=data['close'][-50:],
-            increasing_line_color='#10b981',
-            decreasing_line_color='#ef4444',
-            showlegend=False
+            x=data.index[-60:], open=data['open'][-60:], high=data['high'][-60:],
+            low=data['low'][-60:], close=data['close'][-60:],
+            increasing_line_color='#10b981', decreasing_line_color='#ef4444', showlegend=False
         ), row=1, col=1)
 
-        # SMA
-        fig.add_trace(go.Scatter(
-            x=data.index[-50:],
-            y=data['sma_20'][-50:],
-            line=dict(color='#f59e0b', width=1),
-            showlegend=False
-        ), row=1, col=1)
+        # Bollinger Bands
+        fig.add_trace(go.Scatter(x=data.index[-60:], y=data['bb_upper'][-60:], line=dict(color='rgba(107,114,128,0.5)', width=1), showlegend=False), row=1, col=1)
+        fig.add_trace(go.Scatter(x=data.index[-60:], y=data['bb_lower'][-60:], line=dict(color='rgba(107,114,128,0.5)', width=1), fill='tonexty', fillcolor='rgba(107,114,128,0.1)', showlegend=False), row=1, col=1)
+
+        # SMAs
+        fig.add_trace(go.Scatter(x=data.index[-60:], y=data['sma_20'][-60:], line=dict(color='#f59e0b', width=1), name='SMA20'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=data.index[-60:], y=data['sma_50'][-60:], line=dict(color='#3b82f6', width=1), name='SMA50'), row=1, col=1)
 
         # RSI
-        fig.add_trace(go.Scatter(
-            x=data.index[-50:],
-            y=data['rsi'][-50:],
-            line=dict(color='#8b5cf6', width=1),
-            showlegend=False
-        ), row=2, col=1)
+        fig.add_trace(go.Scatter(x=data.index[-60:], y=data['rsi'][-60:], line=dict(color='#8b5cf6', width=1), showlegend=False), row=2, col=1)
         fig.add_hline(y=70, line_dash="dash", line_color="rgba(239,68,68,0.5)", row=2, col=1)
         fig.add_hline(y=30, line_dash="dash", line_color="rgba(16,185,129,0.5)", row=2, col=1)
 
         fig.update_layout(
-            height=chart_height,
-            template='plotly_dark',
-            paper_bgcolor='#0e1117',
-            plot_bgcolor='#0e1117',
-            xaxis_rangeslider_visible=False,
-            margin=dict(l=0, r=0, t=5, b=0),
-            showlegend=False
+            height=chart_height, template='plotly_dark', paper_bgcolor='#0e1117', plot_bgcolor='#0e1117',
+            xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=5, b=0),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, font=dict(size=10))
         )
-        fig.update_xaxes(showticklabels=False)
-        fig.update_yaxes(showticklabels=True, tickfont=dict(size=9))
+        st.plotly_chart(fig, use_container_width=True, key=f"main_chart_{panel_id}")
 
-        st.plotly_chart(fig, use_container_width=True, key=f"chart_{symbol}_{panel_id}")
+    with tab_ind:
+        ind1, ind2 = st.columns(2)
+        with ind1:
+            st.markdown("**Momentum**")
+            st.markdown(f"- RSI: {latest.get('rsi', 0):.1f}")
+            st.markdown(f"- Stochastic: {latest.get('stoch_k', 0):.1f}")
+            st.markdown(f"- MFI: {latest.get('mfi', 0):.1f}")
+            st.markdown(f"- CCI: {latest.get('cci', 0):.1f}")
+        with ind2:
+            st.markdown("**Trend**")
+            st.markdown(f"- MACD: {'Bullish' if latest.get('macd_hist', 0) > 0 else 'Bearish'}")
+            st.markdown(f"- ADX: {latest.get('adx', 0):.1f}")
+            st.markdown(f"- Above SMA20: {'Yes' if price > latest.get('sma_20', 0) else 'No'}")
+            st.markdown(f"- Above SMA50: {'Yes' if price > latest.get('sma_50', 0) else 'No'}")
+
+    with tab_levels:
+        lv1, lv2 = st.columns(2)
+        with lv1:
+            st.markdown("**Support**")
+            st.markdown(f"- S1: ${latest.get('s1', 0):.2f}")
+            st.markdown(f"- S2: ${latest.get('s2', 0):.2f}")
+            st.markdown(f"- BB Lower: ${latest.get('bb_lower', 0):.2f}")
+        with lv2:
+            st.markdown("**Resistance**")
+            st.markdown(f"- R1: ${latest.get('r1', 0):.2f}")
+            st.markdown(f"- R2: ${latest.get('r2', 0):.2f}")
+            st.markdown(f"- BB Upper: ${latest.get('bb_upper', 0):.2f}")
+
+    # Signal sources (compact)
+    st.markdown("**Signals:**")
+    signals_html = ""
+    for source, sig in list(confluence['sources'].items())[:6]:
+        color = "#10b981" if sig == "BUY" else "#ef4444" if sig == "SELL" else "#6b7280"
+        signals_html += f'<span style="display:inline-block;margin:2px;padding:3px 8px;background:#1a1f2e;border-radius:4px;border-left:2px solid {color};font-size:11px;"><b>{source}</b>: <span style="color:{color}">{sig}</span></span>'
+    st.markdown(signals_html, unsafe_allow_html=True)
 
 # ===== UI =====
 
@@ -865,19 +889,27 @@ if mode == "Analysis":
             st.markdown("---")
 
             if num_panels == 2:
-                chart_cols = st.columns(2)
-                for i, sym in enumerate(symbols_selected):
-                    render_compact_analysis(sym, chart_cols[i], compact=True, panel_id=i)
+                col1, col2 = st.columns(2)
+                with col1:
+                    render_full_panel(symbols_selected[0], panel_id=0, is_compact=True)
+                with col2:
+                    render_full_panel(symbols_selected[1], panel_id=1, is_compact=True)
             else:  # 4-split
                 # First row
-                row1_cols = st.columns(2)
-                render_compact_analysis(symbols_selected[0], row1_cols[0], compact=True, panel_id=0)
-                render_compact_analysis(symbols_selected[1], row1_cols[1], compact=True, panel_id=1)
+                col1, col2 = st.columns(2)
+                with col1:
+                    render_full_panel(symbols_selected[0], panel_id=0, is_compact=True)
+                with col2:
+                    render_full_panel(symbols_selected[1], panel_id=1, is_compact=True)
+
+                st.markdown("---")
 
                 # Second row
-                row2_cols = st.columns(2)
-                render_compact_analysis(symbols_selected[2], row2_cols[0], compact=True, panel_id=2)
-                render_compact_analysis(symbols_selected[3], row2_cols[1], compact=True, panel_id=3)
+                col3, col4 = st.columns(2)
+                with col3:
+                    render_full_panel(symbols_selected[2], panel_id=2, is_compact=True)
+                with col4:
+                    render_full_panel(symbols_selected[3], panel_id=3, is_compact=True)
 
     else:
         # Normal single view
