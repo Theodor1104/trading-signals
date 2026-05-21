@@ -692,6 +692,102 @@ def scan_industry(stocks, progress_cb=None):
         time.sleep(0.1)
     return results
 
+def render_compact_analysis(symbol, container, compact=False):
+    """Render a compact stock analysis panel"""
+    with container:
+        data = fetch_stock_data(symbol, period="3mo")
+        if data is None or len(data) < 50:
+            st.error(f"No data for {symbol}")
+            return
+
+        data = calculate_indicators(data)
+        latest = data.iloc[-1]
+        prev = data.iloc[-2]
+        price = latest['close']
+        change = ((price / prev['close']) - 1) * 100
+
+        # Quick confluence
+        confluence = calculate_confluence(data, None, 0, None, None)
+        signal = confluence['signal']
+        score = confluence['score']
+
+        # Header with signal
+        signal_color = "#10b981" if signal == "BUY" else "#ef4444" if signal == "SELL" else "#f59e0b"
+        st.markdown(f"""
+        <div style="background: #1a1f2e; padding: 12px; border-radius: 8px; border-left: 4px solid {signal_color}; margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 18px; font-weight: 700; color: #fff;">{symbol}</span>
+                <span style="font-size: 14px; font-weight: 600; color: {signal_color};">{signal} ({score:.0f}%)</span>
+            </div>
+            <div style="margin-top: 5px;">
+                <span style="font-size: 20px; color: #fff;">${price:.2f}</span>
+                <span style="font-size: 14px; color: {'#10b981' if change >= 0 else '#ef4444'}; margin-left: 10px;">{change:+.2f}%</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Metrics row
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            rsi = latest.get('rsi', 0)
+            rsi_color = "#10b981" if rsi < 30 else "#ef4444" if rsi > 70 else "#9ca3af"
+            st.markdown(f"<p style='margin:0;color:#6b7280;font-size:11px;'>RSI</p><p style='margin:0;font-size:16px;color:{rsi_color};'>{rsi:.1f}</p>", unsafe_allow_html=True)
+        with col2:
+            macd_h = latest.get('macd_hist', 0)
+            macd_color = "#10b981" if macd_h > 0 else "#ef4444"
+            st.markdown(f"<p style='margin:0;color:#6b7280;font-size:11px;'>MACD</p><p style='margin:0;font-size:16px;color:{macd_color};'>{'Bullish' if macd_h > 0 else 'Bearish'}</p>", unsafe_allow_html=True)
+        with col3:
+            vol = latest.get('volatility_20', 0) if 'volatility_20' in latest else 0
+            st.markdown(f"<p style='margin:0;color:#6b7280;font-size:11px;'>Volatility</p><p style='margin:0;font-size:16px;color:#9ca3af;'>{vol:.1f}%</p>", unsafe_allow_html=True)
+
+        # Compact chart
+        chart_height = 200 if compact else 300
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08, row_heights=[0.7, 0.3])
+
+        # Candlestick
+        fig.add_trace(go.Candlestick(
+            x=data.index[-50:],
+            open=data['open'][-50:],
+            high=data['high'][-50:],
+            low=data['low'][-50:],
+            close=data['close'][-50:],
+            increasing_line_color='#10b981',
+            decreasing_line_color='#ef4444',
+            showlegend=False
+        ), row=1, col=1)
+
+        # SMA
+        fig.add_trace(go.Scatter(
+            x=data.index[-50:],
+            y=data['sma_20'][-50:],
+            line=dict(color='#f59e0b', width=1),
+            showlegend=False
+        ), row=1, col=1)
+
+        # RSI
+        fig.add_trace(go.Scatter(
+            x=data.index[-50:],
+            y=data['rsi'][-50:],
+            line=dict(color='#8b5cf6', width=1),
+            showlegend=False
+        ), row=2, col=1)
+        fig.add_hline(y=70, line_dash="dash", line_color="rgba(239,68,68,0.5)", row=2, col=1)
+        fig.add_hline(y=30, line_dash="dash", line_color="rgba(16,185,129,0.5)", row=2, col=1)
+
+        fig.update_layout(
+            height=chart_height,
+            template='plotly_dark',
+            paper_bgcolor='#0e1117',
+            plot_bgcolor='#0e1117',
+            xaxis_rangeslider_visible=False,
+            margin=dict(l=0, r=0, t=5, b=0),
+            showlegend=False
+        )
+        fig.update_xaxes(showticklabels=False)
+        fig.update_yaxes(showticklabels=True, tickfont=dict(size=9))
+
+        st.plotly_chart(fig, use_container_width=True, key=f"chart_{symbol}")
+
 # ===== UI =====
 
 # Header
@@ -712,6 +808,10 @@ with st.sidebar:
     market = st.selectbox("", ["Stocks", "Crypto", "Forex"], label_visibility="collapsed")
 
     st.markdown("---")
+    st.markdown("### VIEW MODE")
+    view_mode = st.radio("", ["Normal", "2-Split", "4-Split"], label_visibility="collapsed", horizontal=True)
+
+    st.markdown("---")
     auto_refresh = st.checkbox("Auto-refresh (30s)")
 
     if market == "Crypto":
@@ -725,218 +825,274 @@ with st.sidebar:
 
 # Main content
 if mode == "Analysis":
-    col_select, col_space = st.columns([1, 3])
 
-    with col_select:
-        if market == "Stocks":
-            industry = st.selectbox("Sector", list(INDUSTRIES.keys()))
-            symbol = st.selectbox("Symbol", INDUSTRIES[industry])
-        elif market == "Crypto":
-            symbol = st.selectbox("Symbol", CRYPTO_SYMBOLS)
-        else:
-            symbol = st.selectbox("Symbol", FOREX_PAIRS)
+    # Determine number of panels based on view mode
+    if view_mode == "4-Split":
+        num_panels = 4
+    elif view_mode == "2-Split":
+        num_panels = 2
+    else:
+        num_panels = 1
 
-        analyze = st.button("ANALYZE", use_container_width=True, type="primary")
+    # Symbol selection for split views
+    if num_panels > 1:
+        st.markdown(f"### SELECT {num_panels} SYMBOLS")
 
-    if analyze or auto_refresh:
-        with st.spinner("Analyzing..."):
-            tf_data = fetch_multi_timeframe_data(symbol)
-            data = tf_data.get('1D')
+        symbols_selected = []
 
-            if data is None or len(data) < 50:
-                st.error("Insufficient data for this symbol")
-                st.stop()
+        if num_panels == 2:
+            sel_cols = st.columns(2)
+        else:  # 4-split
+            sel_cols = st.columns(4)
 
-            data = calculate_indicators(data)
-            keywords = [symbol.split('-')[0], symbol.replace('-USD', '')]
-            articles, news_sentiment = fetch_news_sentiment(keywords)
-            fg = get_fear_greed_index() if market == "Crypto" else None
-            tv_analysis = get_tradingview_analysis(symbol)
-            analyst_ratings = get_analyst_ratings(symbol)
-            stock_info = get_stock_info(symbol)
-            risk = calculate_risk(data)
-            confluence = calculate_confluence(data, tv_analysis, news_sentiment, fg, analyst_ratings)
+        for i in range(num_panels):
+            with sel_cols[i]:
+                st.markdown(f"**Panel {i+1}**")
+                if market == "Stocks":
+                    ind_key = f"industry_{i}"
+                    sym_key = f"symbol_{i}"
+                    industry_sel = st.selectbox("Sector", list(INDUSTRIES.keys()), key=ind_key)
+                    symbol_sel = st.selectbox("Symbol", INDUSTRIES[industry_sel], key=sym_key)
+                elif market == "Crypto":
+                    symbol_sel = st.selectbox("Symbol", CRYPTO_SYMBOLS, key=f"symbol_{i}")
+                else:
+                    symbol_sel = st.selectbox("Symbol", FOREX_PAIRS, key=f"symbol_{i}")
+                symbols_selected.append(symbol_sel)
 
-            latest = data.iloc[-1]
-            prev = data.iloc[-2]
-            price = latest['close']
-            change = ((price / prev['close']) - 1) * 100
+        analyze = st.button("ANALYZE ALL", use_container_width=True, type="primary")
 
-        # Results header
-        st.markdown("---")
+        if analyze or auto_refresh:
+            st.markdown("---")
 
-        # Top metrics row
-        col1, col2, col3, col4, col5 = st.columns(5)
+            if num_panels == 2:
+                chart_cols = st.columns(2)
+                for i, sym in enumerate(symbols_selected):
+                    render_compact_analysis(sym, chart_cols[i], compact=True)
+            else:  # 4-split
+                # First row
+                row1_cols = st.columns(2)
+                render_compact_analysis(symbols_selected[0], row1_cols[0], compact=True)
+                render_compact_analysis(symbols_selected[1], row1_cols[1], compact=True)
 
-        with col1:
-            signal = confluence['signal']
-            score = confluence['score']
-            if signal == 'BUY':
-                st.markdown(f"""<div class="signal-buy"><h3 style="color: white; margin: 0;">BUY</h3><p style="color: #d1fae5; margin: 0;">{score:.0f}% Score</p></div>""", unsafe_allow_html=True)
-            elif signal == 'SELL':
-                st.markdown(f"""<div class="signal-sell"><h3 style="color: white; margin: 0;">SELL</h3><p style="color: #fecaca; margin: 0;">{score:.0f}% Score</p></div>""", unsafe_allow_html=True)
+                # Second row
+                row2_cols = st.columns(2)
+                render_compact_analysis(symbols_selected[2], row2_cols[0], compact=True)
+                render_compact_analysis(symbols_selected[3], row2_cols[1], compact=True)
+
+    else:
+        # Normal single view
+        col_select, col_space = st.columns([1, 3])
+
+        with col_select:
+            if market == "Stocks":
+                industry = st.selectbox("Sector", list(INDUSTRIES.keys()))
+                symbol = st.selectbox("Symbol", INDUSTRIES[industry])
+            elif market == "Crypto":
+                symbol = st.selectbox("Symbol", CRYPTO_SYMBOLS)
             else:
-                st.markdown(f"""<div class="signal-neutral"><h3 style="color: white; margin: 0;">HOLD</h3><p style="color: #fef3c7; margin: 0;">Neutral</p></div>""", unsafe_allow_html=True)
+                symbol = st.selectbox("Symbol", FOREX_PAIRS)
 
-        with col2:
-            st.metric("Price", f"${price:,.2f}", f"{change:+.2f}%")
+            analyze = st.button("ANALYZE", use_container_width=True, type="primary")
 
-        with col3:
-            st.metric("Confidence", confluence['confidence'])
+        if analyze or auto_refresh:
+            with st.spinner("Analyzing..."):
+                tf_data = fetch_multi_timeframe_data(symbol)
+                data = tf_data.get('1D')
 
-        with col4:
-            rsi_val = latest.get('rsi', 0)
-            st.metric("RSI (14)", f"{rsi_val:.1f}")
+                if data is None or len(data) < 50:
+                    st.error("Insufficient data for this symbol")
+                    st.stop()
 
-        with col5:
-            if risk:
-                st.metric("Volatility", f"{risk['volatility']:.1f}%")
+                data = calculate_indicators(data)
+                keywords = [symbol.split('-')[0], symbol.replace('-USD', '')]
+                articles, news_sentiment = fetch_news_sentiment(keywords)
+                fg = get_fear_greed_index() if market == "Crypto" else None
+                tv_analysis = get_tradingview_analysis(symbol)
+                analyst_ratings = get_analyst_ratings(symbol)
+                stock_info = get_stock_info(symbol)
+                risk = calculate_risk(data)
+                confluence = calculate_confluence(data, tv_analysis, news_sentiment, fg, analyst_ratings)
 
-        # Signal sources
-        st.markdown("---")
-        st.markdown("### SIGNAL SOURCES")
+                latest = data.iloc[-1]
+                prev = data.iloc[-2]
+                price = latest['close']
+                change = ((price / prev['close']) - 1) * 100
 
-        source_cols = st.columns(min(8, len(confluence['sources'])))
-        for i, (source, sig) in enumerate(confluence['sources'].items()):
-            with source_cols[i % len(source_cols)]:
-                color = "#10b981" if sig == "BUY" else "#ef4444" if sig == "SELL" else "#6b7280"
-                st.markdown(f"""
-                <div style="text-align: center; padding: 10px; background: #1a1f2e; border-radius: 6px; border-left: 3px solid {color};">
-                    <p style="margin: 0; font-size: 12px; color: #9ca3af;">{source}</p>
-                    <p style="margin: 0; font-weight: 600; color: {color};">{sig}</p>
-                </div>
-                """, unsafe_allow_html=True)
+            # Results header
+            st.markdown("---")
 
-        # Tabs
-        st.markdown("---")
-        tab1, tab2, tab3, tab4 = st.tabs(["CHART", "INDICATORS", "RISK", "NEWS"])
+            # Top metrics row
+            col1, col2, col3, col4, col5 = st.columns(5)
 
-        with tab1:
-            fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05,
-                               row_heights=[0.6, 0.2, 0.2])
+            with col1:
+                signal = confluence['signal']
+                score = confluence['score']
+                if signal == 'BUY':
+                    st.markdown(f"""<div class="signal-buy"><h3 style="color: white; margin: 0;">BUY</h3><p style="color: #d1fae5; margin: 0;">{score:.0f}% Score</p></div>""", unsafe_allow_html=True)
+                elif signal == 'SELL':
+                    st.markdown(f"""<div class="signal-sell"><h3 style="color: white; margin: 0;">SELL</h3><p style="color: #fecaca; margin: 0;">{score:.0f}% Score</p></div>""", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""<div class="signal-neutral"><h3 style="color: white; margin: 0;">HOLD</h3><p style="color: #fef3c7; margin: 0;">Neutral</p></div>""", unsafe_allow_html=True)
 
-            # Candlestick
-            fig.add_trace(go.Candlestick(x=data.index, open=data['open'], high=data['high'],
-                low=data['low'], close=data['close'], name='Price',
-                increasing_line_color='#10b981', decreasing_line_color='#ef4444'), row=1, col=1)
+            with col2:
+                st.metric("Price", f"${price:,.2f}", f"{change:+.2f}%")
 
-            # Bollinger Bands
-            fig.add_trace(go.Scatter(x=data.index, y=data['bb_upper'], line=dict(color='#6b7280', width=1), name='BB', showlegend=False), row=1, col=1)
-            fig.add_trace(go.Scatter(x=data.index, y=data['bb_lower'], line=dict(color='#6b7280', width=1), fill='tonexty', fillcolor='rgba(107,114,128,0.1)', showlegend=False), row=1, col=1)
+            with col3:
+                st.metric("Confidence", confluence['confidence'])
 
-            # MAs
-            fig.add_trace(go.Scatter(x=data.index, y=data['sma_20'], line=dict(color='#f59e0b', width=1), name='SMA 20'), row=1, col=1)
-            fig.add_trace(go.Scatter(x=data.index, y=data['sma_50'], line=dict(color='#3b82f6', width=1), name='SMA 50'), row=1, col=1)
+            with col4:
+                rsi_val = latest.get('rsi', 0)
+                st.metric("RSI (14)", f"{rsi_val:.1f}")
 
-            # RSI
-            fig.add_trace(go.Scatter(x=data.index, y=data['rsi'], line=dict(color='#8b5cf6', width=1), name='RSI'), row=2, col=1)
-            fig.add_hline(y=70, line_dash="dash", line_color="#ef4444", row=2, col=1)
-            fig.add_hline(y=30, line_dash="dash", line_color="#10b981", row=2, col=1)
-
-            # MACD
-            colors = ['#10b981' if v >= 0 else '#ef4444' for v in data['macd_hist']]
-            fig.add_trace(go.Bar(x=data.index, y=data['macd_hist'], marker_color=colors, name='MACD'), row=3, col=1)
-
-            fig.update_layout(
-                height=600,
-                template='plotly_dark',
-                paper_bgcolor='#0e1117',
-                plot_bgcolor='#0e1117',
-                showlegend=True,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02),
-                xaxis_rangeslider_visible=False,
-                margin=dict(l=0, r=0, t=30, b=0)
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-        with tab2:
-            col_m, col_t, col_v = st.columns(3)
-
-            with col_m:
-                st.markdown("#### Momentum")
-                indicators = [
-                    ("RSI (14)", latest.get('rsi', 0), 30, 70),
-                    ("Stochastic", latest.get('stoch_k', 0), 20, 80),
-                    ("MFI", latest.get('mfi', 0), 20, 80),
-                    ("CCI", latest.get('cci', 0), -100, 100),
-                    ("Williams %R", latest.get('williams_r', 0), -80, -20),
-                ]
-                for name, val, low, high in indicators:
-                    if val:
-                        status = "Oversold" if val < low else "Overbought" if val > high else "Neutral"
-                        color = "#10b981" if val < low else "#ef4444" if val > high else "#6b7280"
-                        st.markdown(f"**{name}**: <span style='color:{color}'>{val:.1f}</span> ({status})", unsafe_allow_html=True)
-
-            with col_t:
-                st.markdown("#### Trend")
-                adx = latest.get('adx', 0)
-                st.markdown(f"**ADX**: {adx:.1f} ({'Strong' if adx > 25 else 'Weak'} trend)")
-                macd_h = latest.get('macd_hist', 0)
-                st.markdown(f"**MACD**: {'Bullish' if macd_h > 0 else 'Bearish'}")
-
-                st.markdown("**Price vs MAs:**")
-                for ma, col in [('SMA 20', 'sma_20'), ('SMA 50', 'sma_50'), ('SMA 200', 'sma_200')]:
-                    if col in latest and not pd.isna(latest[col]):
-                        above = price > latest[col]
-                        st.markdown(f"- {ma}: {'Above' if above else 'Below'} (${latest[col]:.2f})")
-
-            with col_v:
-                st.markdown("#### Volatility")
-                st.markdown(f"**ATR**: ${latest.get('atr', 0):.2f} ({latest.get('atr_pct', 0):.1f}%)")
-                st.markdown(f"**BB %B**: {latest.get('bb_pct', 0):.2f}")
+            with col5:
                 if risk:
-                    st.markdown(f"**20D Volatility**: {risk['volatility']:.1f}%")
+                    st.metric("Volatility", f"{risk['volatility']:.1f}%")
 
-        with tab3:
-            if risk:
-                col_r1, col_r2 = st.columns(2)
-                with col_r1:
-                    st.metric("20-Day Volatility", f"{risk['volatility']:.1f}%")
-                    st.metric("Max Drawdown", f"{risk['max_drawdown']:.1f}%")
-                with col_r2:
-                    st.metric("Current Drawdown", f"{risk['current_drawdown']:.1f}%")
-                    st.metric("ATR %", f"{risk['atr_pct']:.2f}%")
+            # Signal sources
+            st.markdown("---")
+            st.markdown("### SIGNAL SOURCES")
 
-                # Drawdown chart
-                fig_dd = go.Figure()
-                fig_dd.add_trace(go.Scatter(x=data.index, y=data['drawdown'], fill='tozeroy',
-                    fillcolor='rgba(239,68,68,0.3)', line=dict(color='#ef4444', width=1)))
-                fig_dd.update_layout(height=200, template='plotly_dark', paper_bgcolor='#0e1117',
-                    plot_bgcolor='#0e1117', margin=dict(l=0, r=0, t=10, b=0), showlegend=False)
-                st.plotly_chart(fig_dd, use_container_width=True)
-
-        with tab4:
-            st.markdown(f"**Sentiment Score**: {news_sentiment:.2f}")
-            if articles:
-                for art in articles[:5]:
-                    color = "#10b981" if art['sentiment'] > 0.1 else "#ef4444" if art['sentiment'] < -0.1 else "#6b7280"
+            source_cols = st.columns(min(8, len(confluence['sources'])))
+            for i, (source, sig) in enumerate(confluence['sources'].items()):
+                with source_cols[i % len(source_cols)]:
+                    color = "#10b981" if sig == "BUY" else "#ef4444" if sig == "SELL" else "#6b7280"
                     st.markdown(f"""
-                    <div style="padding: 10px; background: #1a1f2e; border-radius: 6px; margin: 5px 0; border-left: 3px solid {color};">
-                        <p style="margin: 0; font-weight: 600;">{art['source']}</p>
-                        <p style="margin: 5px 0; color: #9ca3af;">{art['title'][:100]}...</p>
+                    <div style="text-align: center; padding: 10px; background: #1a1f2e; border-radius: 6px; border-left: 3px solid {color};">
+                        <p style="margin: 0; font-size: 12px; color: #9ca3af;">{source}</p>
+                        <p style="margin: 0; font-weight: 600; color: {color};">{sig}</p>
                     </div>
                     """, unsafe_allow_html=True)
-            else:
-                st.info("No recent news found")
 
-        # Company info
-        if stock_info and market == "Stocks":
+            # Tabs
             st.markdown("---")
-            st.markdown("### COMPANY INFO")
-            info_cols = st.columns(5)
-            with info_cols[0]:
-                st.metric("Sector", stock_info.get('sector', 'N/A'))
-            with info_cols[1]:
-                pe = stock_info.get('pe_ratio', 0)
-                st.metric("P/E", f"{pe:.1f}" if pe else "N/A")
-            with info_cols[2]:
-                mc = stock_info.get('market_cap', 0)
-                st.metric("Market Cap", f"${mc/1e9:.1f}B" if mc else "N/A")
-            with info_cols[3]:
-                st.metric("52W High", f"${stock_info.get('52w_high', 0):,.2f}")
-            with info_cols[4]:
-                st.metric("52W Low", f"${stock_info.get('52w_low', 0):,.2f}")
+            tab1, tab2, tab3, tab4 = st.tabs(["CHART", "INDICATORS", "RISK", "NEWS"])
+
+            with tab1:
+                fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05,
+                                   row_heights=[0.6, 0.2, 0.2])
+
+                # Candlestick
+                fig.add_trace(go.Candlestick(x=data.index, open=data['open'], high=data['high'],
+                    low=data['low'], close=data['close'], name='Price',
+                    increasing_line_color='#10b981', decreasing_line_color='#ef4444'), row=1, col=1)
+
+                # Bollinger Bands
+                fig.add_trace(go.Scatter(x=data.index, y=data['bb_upper'], line=dict(color='#6b7280', width=1), name='BB', showlegend=False), row=1, col=1)
+                fig.add_trace(go.Scatter(x=data.index, y=data['bb_lower'], line=dict(color='#6b7280', width=1), fill='tonexty', fillcolor='rgba(107,114,128,0.1)', showlegend=False), row=1, col=1)
+
+                # MAs
+                fig.add_trace(go.Scatter(x=data.index, y=data['sma_20'], line=dict(color='#f59e0b', width=1), name='SMA 20'), row=1, col=1)
+                fig.add_trace(go.Scatter(x=data.index, y=data['sma_50'], line=dict(color='#3b82f6', width=1), name='SMA 50'), row=1, col=1)
+
+                # RSI
+                fig.add_trace(go.Scatter(x=data.index, y=data['rsi'], line=dict(color='#8b5cf6', width=1), name='RSI'), row=2, col=1)
+                fig.add_hline(y=70, line_dash="dash", line_color="#ef4444", row=2, col=1)
+                fig.add_hline(y=30, line_dash="dash", line_color="#10b981", row=2, col=1)
+
+                # MACD
+                colors = ['#10b981' if v >= 0 else '#ef4444' for v in data['macd_hist']]
+                fig.add_trace(go.Bar(x=data.index, y=data['macd_hist'], marker_color=colors, name='MACD'), row=3, col=1)
+
+                fig.update_layout(
+                    height=600,
+                    template='plotly_dark',
+                    paper_bgcolor='#0e1117',
+                    plot_bgcolor='#0e1117',
+                    showlegend=True,
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                    xaxis_rangeslider_visible=False,
+                    margin=dict(l=0, r=0, t=30, b=0)
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+            with tab2:
+                col_m, col_t, col_v = st.columns(3)
+
+                with col_m:
+                    st.markdown("#### Momentum")
+                    indicators = [
+                        ("RSI (14)", latest.get('rsi', 0), 30, 70),
+                        ("Stochastic", latest.get('stoch_k', 0), 20, 80),
+                        ("MFI", latest.get('mfi', 0), 20, 80),
+                        ("CCI", latest.get('cci', 0), -100, 100),
+                        ("Williams %R", latest.get('williams_r', 0), -80, -20),
+                    ]
+                    for name, val, low, high in indicators:
+                        if val:
+                            status = "Oversold" if val < low else "Overbought" if val > high else "Neutral"
+                            color = "#10b981" if val < low else "#ef4444" if val > high else "#6b7280"
+                            st.markdown(f"**{name}**: <span style='color:{color}'>{val:.1f}</span> ({status})", unsafe_allow_html=True)
+
+                with col_t:
+                    st.markdown("#### Trend")
+                    adx = latest.get('adx', 0)
+                    st.markdown(f"**ADX**: {adx:.1f} ({'Strong' if adx > 25 else 'Weak'} trend)")
+                    macd_h = latest.get('macd_hist', 0)
+                    st.markdown(f"**MACD**: {'Bullish' if macd_h > 0 else 'Bearish'}")
+
+                    st.markdown("**Price vs MAs:**")
+                    for ma, col in [('SMA 20', 'sma_20'), ('SMA 50', 'sma_50'), ('SMA 200', 'sma_200')]:
+                        if col in latest and not pd.isna(latest[col]):
+                            above = price > latest[col]
+                            st.markdown(f"- {ma}: {'Above' if above else 'Below'} (${latest[col]:.2f})")
+
+                with col_v:
+                    st.markdown("#### Volatility")
+                    st.markdown(f"**ATR**: ${latest.get('atr', 0):.2f} ({latest.get('atr_pct', 0):.1f}%)")
+                    st.markdown(f"**BB %B**: {latest.get('bb_pct', 0):.2f}")
+                    if risk:
+                        st.markdown(f"**20D Volatility**: {risk['volatility']:.1f}%")
+
+            with tab3:
+                if risk:
+                    col_r1, col_r2 = st.columns(2)
+                    with col_r1:
+                        st.metric("20-Day Volatility", f"{risk['volatility']:.1f}%")
+                        st.metric("Max Drawdown", f"{risk['max_drawdown']:.1f}%")
+                    with col_r2:
+                        st.metric("Current Drawdown", f"{risk['current_drawdown']:.1f}%")
+                        st.metric("ATR %", f"{risk['atr_pct']:.2f}%")
+
+                    # Drawdown chart
+                    fig_dd = go.Figure()
+                    fig_dd.add_trace(go.Scatter(x=data.index, y=data['drawdown'], fill='tozeroy',
+                        fillcolor='rgba(239,68,68,0.3)', line=dict(color='#ef4444', width=1)))
+                    fig_dd.update_layout(height=200, template='plotly_dark', paper_bgcolor='#0e1117',
+                        plot_bgcolor='#0e1117', margin=dict(l=0, r=0, t=10, b=0), showlegend=False)
+                    st.plotly_chart(fig_dd, use_container_width=True)
+
+            with tab4:
+                st.markdown(f"**Sentiment Score**: {news_sentiment:.2f}")
+                if articles:
+                    for art in articles[:5]:
+                        color = "#10b981" if art['sentiment'] > 0.1 else "#ef4444" if art['sentiment'] < -0.1 else "#6b7280"
+                        st.markdown(f"""
+                        <div style="padding: 10px; background: #1a1f2e; border-radius: 6px; margin: 5px 0; border-left: 3px solid {color};">
+                            <p style="margin: 0; font-weight: 600;">{art['source']}</p>
+                            <p style="margin: 5px 0; color: #9ca3af;">{art['title'][:100]}...</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("No recent news found")
+
+            # Company info
+            if stock_info and market == "Stocks":
+                st.markdown("---")
+                st.markdown("### COMPANY INFO")
+                info_cols = st.columns(5)
+                with info_cols[0]:
+                    st.metric("Sector", stock_info.get('sector', 'N/A'))
+                with info_cols[1]:
+                    pe = stock_info.get('pe_ratio', 0)
+                    st.metric("P/E", f"{pe:.1f}" if pe else "N/A")
+                with info_cols[2]:
+                    mc = stock_info.get('market_cap', 0)
+                    st.metric("Market Cap", f"${mc/1e9:.1f}B" if mc else "N/A")
+                with info_cols[3]:
+                    st.metric("52W High", f"${stock_info.get('52w_high', 0):,.2f}")
+                with info_cols[4]:
+                    st.metric("52W Low", f"${stock_info.get('52w_low', 0):,.2f}")
 
 elif mode == "Scanner":
     st.markdown("### SECTOR SCANNER")
