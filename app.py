@@ -516,122 +516,365 @@ def calculate_indicators(data):
     return df
 
 def calculate_confluence(data, tv_analysis, news_sentiment, fear_greed, analyst_ratings):
-    confluence = {'sources': {}, 'bullish': 0, 'bearish': 0, 'total': 0}
+    """
+    Advanced confluence scoring with 25+ indicators
+    Combines momentum, trend, volume, volatility, and external data
+    """
+    confluence = {'sources': {}, 'bullish': 0, 'bearish': 0, 'total': 0, 'details': {}}
 
-    if data is not None and len(data) >= 2:
+    if data is not None and len(data) >= 10:
         latest = data.iloc[-1]
+        prev = data.iloc[-2]
+        prev5 = data.iloc[-5] if len(data) >= 5 else prev
         price = latest['close']
 
-        # Technical signals
         signals = []
 
+        # ===== MOMENTUM INDICATORS =====
+
+        # RSI (14) - Standard
         rsi = latest.get('rsi')
         if rsi:
-            if rsi < 30: signals.append(('RSI', 'BUY', 2))
-            elif rsi > 70: signals.append(('RSI', 'SELL', 2))
-            else: signals.append(('RSI', 'NEUTRAL', 0))
+            if rsi < 30: signals.append(('RSI 14', 'BUY', 3))
+            elif rsi < 40: signals.append(('RSI 14', 'BUY', 1))
+            elif rsi > 70: signals.append(('RSI 14', 'SELL', 3))
+            elif rsi > 60: signals.append(('RSI 14', 'SELL', 1))
+            else: signals.append(('RSI 14', 'NEUTRAL', 0))
 
+        # RSI (6) - Fast
+        rsi6 = latest.get('rsi_6')
+        if rsi6:
+            if rsi6 < 20: signals.append(('RSI 6', 'BUY', 2))
+            elif rsi6 > 80: signals.append(('RSI 6', 'SELL', 2))
+
+        # Stochastic %K and %D
+        stoch_k = latest.get('stoch_k')
+        stoch_d = latest.get('stoch_d')
+        if stoch_k and stoch_d:
+            if stoch_k < 20 and stoch_d < 20:
+                signals.append(('Stochastic', 'BUY', 2))
+            elif stoch_k > 80 and stoch_d > 80:
+                signals.append(('Stochastic', 'SELL', 2))
+            # Stochastic crossover
+            prev_stoch_k = prev.get('stoch_k', 0)
+            if stoch_k > stoch_d and prev_stoch_k <= prev.get('stoch_d', 0):
+                signals.append(('Stoch Cross', 'BUY', 1))
+            elif stoch_k < stoch_d and prev_stoch_k >= prev.get('stoch_d', 0):
+                signals.append(('Stoch Cross', 'SELL', 1))
+
+        # CCI
+        cci = latest.get('cci')
+        if cci:
+            if cci < -100: signals.append(('CCI', 'BUY', 2))
+            elif cci < -50: signals.append(('CCI', 'BUY', 1))
+            elif cci > 100: signals.append(('CCI', 'SELL', 2))
+            elif cci > 50: signals.append(('CCI', 'SELL', 1))
+
+        # Williams %R
+        williams = latest.get('williams_r')
+        if williams:
+            if williams < -80: signals.append(('Williams %R', 'BUY', 2))
+            elif williams > -20: signals.append(('Williams %R', 'SELL', 2))
+
+        # Ultimate Oscillator
+        uo = latest.get('ultimate_osc')
+        if uo:
+            if uo < 30: signals.append(('Ultimate Osc', 'BUY', 1))
+            elif uo > 70: signals.append(('Ultimate Osc', 'SELL', 1))
+
+        # ROC (Rate of Change)
+        roc = latest.get('roc')
+        if roc:
+            if roc > 5: signals.append(('ROC', 'BUY', 1))
+            elif roc < -5: signals.append(('ROC', 'SELL', 1))
+
+        # ===== TREND INDICATORS =====
+
+        # MACD
+        macd = latest.get('macd')
+        macd_signal = latest.get('macd_signal')
         macd_hist = latest.get('macd_hist')
         if macd_hist is not None:
-            if macd_hist > 0: signals.append(('MACD', 'BUY', 1))
-            else: signals.append(('MACD', 'SELL', 1))
+            if macd_hist > 0:
+                signals.append(('MACD Hist', 'BUY', 2))
+            else:
+                signals.append(('MACD Hist', 'SELL', 2))
 
-        sma_20, sma_50, sma_200 = latest.get('sma_20'), latest.get('sma_50'), latest.get('sma_200')
+            # MACD Crossover
+            prev_hist = prev.get('macd_hist', 0)
+            if macd_hist > 0 and prev_hist <= 0:
+                signals.append(('MACD Cross', 'BUY', 3))
+            elif macd_hist < 0 and prev_hist >= 0:
+                signals.append(('MACD Cross', 'SELL', 3))
 
-        if sma_20:
-            if price > sma_20: signals.append(('SMA 20', 'BUY', 1))
-            else: signals.append(('SMA 20', 'SELL', 1))
+        # Moving Averages
+        sma_10 = latest.get('sma_10')
+        sma_20 = latest.get('sma_20')
+        sma_50 = latest.get('sma_50')
+        sma_100 = latest.get('sma_100')
+        sma_200 = latest.get('sma_200')
+        ema_9 = latest.get('ema_9')
+        ema_21 = latest.get('ema_21')
 
-        if sma_50:
-            if price > sma_50: signals.append(('SMA 50', 'BUY', 1))
-            else: signals.append(('SMA 50', 'SELL', 1))
+        # Price vs MAs
+        if sma_20 and not pd.isna(sma_20):
+            if price > sma_20: signals.append(('Price>SMA20', 'BUY', 1))
+            else: signals.append(('Price>SMA20', 'SELL', 1))
+
+        if sma_50 and not pd.isna(sma_50):
+            if price > sma_50: signals.append(('Price>SMA50', 'BUY', 2))
+            else: signals.append(('Price>SMA50', 'SELL', 2))
 
         if sma_200 and not pd.isna(sma_200):
-            if price > sma_200: signals.append(('SMA 200', 'BUY', 2))
-            else: signals.append(('SMA 200', 'SELL', 2))
+            if price > sma_200: signals.append(('Price>SMA200', 'BUY', 3))
+            else: signals.append(('Price>SMA200', 'SELL', 3))
 
-        stoch = latest.get('stoch_k')
-        if stoch:
-            if stoch < 20: signals.append(('Stochastic', 'BUY', 1))
-            elif stoch > 80: signals.append(('Stochastic', 'SELL', 1))
+        # Golden Cross / Death Cross (SMA 50 vs 200)
+        if sma_50 and sma_200 and not pd.isna(sma_50) and not pd.isna(sma_200):
+            prev_sma_50 = prev.get('sma_50', 0)
+            prev_sma_200 = prev.get('sma_200', 0)
+            if sma_50 > sma_200:
+                signals.append(('50/200 Trend', 'BUY', 2))
+                if prev_sma_50 and prev_sma_200 and prev_sma_50 <= prev_sma_200:
+                    signals.append(('Golden Cross', 'BUY', 4))
+            else:
+                signals.append(('50/200 Trend', 'SELL', 2))
+                if prev_sma_50 and prev_sma_200 and prev_sma_50 >= prev_sma_200:
+                    signals.append(('Death Cross', 'SELL', 4))
 
-        mfi = latest.get('mfi')
-        if mfi:
-            if mfi < 20: signals.append(('MFI', 'BUY', 1))
-            elif mfi > 80: signals.append(('MFI', 'SELL', 1))
+        # EMA Crossover (9 vs 21)
+        if ema_9 and ema_21 and not pd.isna(ema_9) and not pd.isna(ema_21):
+            if ema_9 > ema_21: signals.append(('EMA 9/21', 'BUY', 1))
+            else: signals.append(('EMA 9/21', 'SELL', 1))
 
+        # ADX - Trend Strength
+        adx = latest.get('adx')
+        adx_pos = latest.get('adx_pos')
+        adx_neg = latest.get('adx_neg')
+        if adx and adx_pos and adx_neg:
+            if adx > 25:  # Strong trend
+                if adx_pos > adx_neg:
+                    signals.append(('ADX Trend', 'BUY', 2))
+                else:
+                    signals.append(('ADX Trend', 'SELL', 2))
+
+        # Ichimoku Cloud
+        ichimoku_a = latest.get('ichimoku_a')
+        ichimoku_b = latest.get('ichimoku_b')
+        if ichimoku_a and ichimoku_b and not pd.isna(ichimoku_a) and not pd.isna(ichimoku_b):
+            cloud_top = max(ichimoku_a, ichimoku_b)
+            cloud_bottom = min(ichimoku_a, ichimoku_b)
+            if price > cloud_top:
+                signals.append(('Ichimoku', 'BUY', 2))
+            elif price < cloud_bottom:
+                signals.append(('Ichimoku', 'SELL', 2))
+            else:
+                signals.append(('Ichimoku', 'NEUTRAL', 0))
+
+        # ===== VOLATILITY INDICATORS =====
+
+        # Bollinger Bands
+        bb_upper = latest.get('bb_upper')
+        bb_lower = latest.get('bb_lower')
         bb_pct = latest.get('bb_pct')
         if bb_pct is not None:
-            if bb_pct < 0: signals.append(('Bollinger', 'BUY', 1))
-            elif bb_pct > 1: signals.append(('Bollinger', 'SELL', 1))
+            if bb_pct < 0:
+                signals.append(('BB %B', 'BUY', 2))
+            elif bb_pct < 0.2:
+                signals.append(('BB %B', 'BUY', 1))
+            elif bb_pct > 1:
+                signals.append(('BB %B', 'SELL', 2))
+            elif bb_pct > 0.8:
+                signals.append(('BB %B', 'SELL', 1))
 
+        # ATR-based volatility signal
+        atr_pct = latest.get('atr_pct')
+        if atr_pct:
+            # High volatility = more caution
+            if atr_pct > 5:
+                confluence['details']['high_volatility'] = True
+
+        # ===== VOLUME INDICATORS =====
+
+        # MFI (Money Flow Index)
+        mfi = latest.get('mfi')
+        if mfi:
+            if mfi < 20: signals.append(('MFI', 'BUY', 2))
+            elif mfi < 30: signals.append(('MFI', 'BUY', 1))
+            elif mfi > 80: signals.append(('MFI', 'SELL', 2))
+            elif mfi > 70: signals.append(('MFI', 'SELL', 1))
+
+        # OBV Trend
+        obv = latest.get('obv')
+        if obv and len(data) >= 10:
+            obv_sma = data['obv'].rolling(10).mean().iloc[-1]
+            if obv > obv_sma:
+                signals.append(('OBV Trend', 'BUY', 1))
+            else:
+                signals.append(('OBV Trend', 'SELL', 1))
+
+        # CMF (Chaikin Money Flow)
+        cmf = latest.get('cmf')
+        if cmf:
+            if cmf > 0.1: signals.append(('CMF', 'BUY', 1))
+            elif cmf < -0.1: signals.append(('CMF', 'SELL', 1))
+
+        # Volume vs Average
+        volume = latest.get('volume')
+        volume_sma = latest.get('volume_sma')
+        if volume and volume_sma and volume_sma > 0:
+            vol_ratio = volume / volume_sma
+            if vol_ratio > 1.5:
+                # High volume confirms the move
+                if price > prev['close']:
+                    signals.append(('Vol Confirm', 'BUY', 1))
+                else:
+                    signals.append(('Vol Confirm', 'SELL', 1))
+
+        # ===== SUPPORT/RESISTANCE =====
+
+        # Pivot Points
+        pivot = latest.get('pivot')
+        r1 = latest.get('r1')
+        s1 = latest.get('s1')
+        if pivot and r1 and s1:
+            if price > r1:
+                signals.append(('Pivot', 'BUY', 1))
+            elif price < s1:
+                signals.append(('Pivot', 'SELL', 1))
+
+        # ===== PRICE ACTION =====
+
+        # 5-day momentum
+        if len(data) >= 5:
+            momentum_5d = ((price / prev5['close']) - 1) * 100
+            if momentum_5d > 5:
+                signals.append(('5D Momentum', 'BUY', 1))
+            elif momentum_5d < -5:
+                signals.append(('5D Momentum', 'SELL', 1))
+
+        # Higher highs / Lower lows (3 day)
+        if len(data) >= 3:
+            highs = data['high'].iloc[-3:]
+            lows = data['low'].iloc[-3:]
+            if highs.iloc[-1] > highs.iloc[-2] > highs.iloc[-3]:
+                signals.append(('Higher Highs', 'BUY', 1))
+            if lows.iloc[-1] < lows.iloc[-2] < lows.iloc[-3]:
+                signals.append(('Lower Lows', 'SELL', 1))
+
+        # ===== RSI DIVERGENCE =====
+        if len(data) >= 14 and rsi:
+            price_14d_ago = data['close'].iloc[-14]
+            rsi_14d_ago = data['rsi'].iloc[-14] if 'rsi' in data else None
+            if rsi_14d_ago:
+                # Bullish divergence: price lower, RSI higher
+                if price < price_14d_ago and rsi > rsi_14d_ago:
+                    signals.append(('RSI Divergence', 'BUY', 2))
+                # Bearish divergence: price higher, RSI lower
+                elif price > price_14d_ago and rsi < rsi_14d_ago:
+                    signals.append(('RSI Divergence', 'SELL', 2))
+
+        # Add all technical signals
         for name, signal, weight in signals:
             confluence['sources'][name] = signal
             if signal == 'BUY': confluence['bullish'] += weight
             elif signal == 'SELL': confluence['bearish'] += weight
             confluence['total'] += 1
 
-    # TradingView
+    # ===== EXTERNAL DATA SOURCES =====
+
+    # TradingView Analysis (3 timeframes)
     if tv_analysis:
         for tf, analysis in tv_analysis.items():
             rec = analysis.get('summary', {}).get('RECOMMENDATION', 'NEUTRAL')
-            if rec in ['STRONG_BUY', 'BUY']:
+            buy_count = analysis.get('summary', {}).get('BUY', 0)
+            sell_count = analysis.get('summary', {}).get('SELL', 0)
+
+            if rec == 'STRONG_BUY':
                 confluence['sources'][f'TV {tf}'] = 'BUY'
-                confluence['bullish'] += 2 if 'STRONG' in rec else 1
-            elif rec in ['STRONG_SELL', 'SELL']:
+                confluence['bullish'] += 3
+            elif rec == 'BUY':
+                confluence['sources'][f'TV {tf}'] = 'BUY'
+                confluence['bullish'] += 2
+            elif rec == 'STRONG_SELL':
                 confluence['sources'][f'TV {tf}'] = 'SELL'
-                confluence['bearish'] += 2 if 'STRONG' in rec else 1
+                confluence['bearish'] += 3
+            elif rec == 'SELL':
+                confluence['sources'][f'TV {tf}'] = 'SELL'
+                confluence['bearish'] += 2
             else:
                 confluence['sources'][f'TV {tf}'] = 'NEUTRAL'
             confluence['total'] += 1
 
-    # News
+    # News Sentiment
     if news_sentiment:
-        if news_sentiment > 0.15:
+        if news_sentiment > 0.3:
+            confluence['sources']['News'] = 'BUY'
+            confluence['bullish'] += 2
+        elif news_sentiment > 0.1:
             confluence['sources']['News'] = 'BUY'
             confluence['bullish'] += 1
-        elif news_sentiment < -0.15:
+        elif news_sentiment < -0.3:
+            confluence['sources']['News'] = 'SELL'
+            confluence['bearish'] += 2
+        elif news_sentiment < -0.1:
             confluence['sources']['News'] = 'SELL'
             confluence['bearish'] += 1
         else:
             confluence['sources']['News'] = 'NEUTRAL'
         confluence['total'] += 1
 
-    # Fear & Greed
+    # Fear & Greed Index (Crypto)
     if fear_greed:
         fg = fear_greed['value']
-        if fg < 25:
+        if fg < 20:
+            confluence['sources']['Fear/Greed'] = 'BUY'
+            confluence['bullish'] += 3
+        elif fg < 35:
             confluence['sources']['Fear/Greed'] = 'BUY'
             confluence['bullish'] += 2
-        elif fg > 75:
+        elif fg > 80:
+            confluence['sources']['Fear/Greed'] = 'SELL'
+            confluence['bearish'] += 3
+        elif fg > 65:
             confluence['sources']['Fear/Greed'] = 'SELL'
             confluence['bearish'] += 2
         else:
             confluence['sources']['Fear/Greed'] = 'NEUTRAL'
         confluence['total'] += 1
 
-    # Analysts
+    # Analyst Ratings
     if analyst_ratings:
-        pct = analyst_ratings.get('buy_pct', 50)
-        if pct > 65:
+        buy_pct = analyst_ratings.get('buy_pct', 50)
+        if buy_pct > 80:
+            confluence['sources']['Analysts'] = 'BUY'
+            confluence['bullish'] += 2
+        elif buy_pct > 60:
             confluence['sources']['Analysts'] = 'BUY'
             confluence['bullish'] += 1
-        elif pct < 35:
+        elif buy_pct < 20:
+            confluence['sources']['Analysts'] = 'SELL'
+            confluence['bearish'] += 2
+        elif buy_pct < 40:
             confluence['sources']['Analysts'] = 'SELL'
             confluence['bearish'] += 1
         else:
             confluence['sources']['Analysts'] = 'NEUTRAL'
         confluence['total'] += 1
 
-    # Calculate final
-    total = confluence['bullish'] + confluence['bearish']
-    if total > 0:
-        if confluence['bullish'] > confluence['bearish']:
+    # ===== CALCULATE FINAL SIGNAL =====
+
+    total_weight = confluence['bullish'] + confluence['bearish']
+    if total_weight > 0:
+        bull_pct = (confluence['bullish'] / total_weight) * 100
+        bear_pct = (confluence['bearish'] / total_weight) * 100
+
+        if bull_pct > 55:
             confluence['signal'] = 'BUY'
-            confluence['score'] = (confluence['bullish'] / total) * 100
-        elif confluence['bearish'] > confluence['bullish']:
+            confluence['score'] = bull_pct
+        elif bear_pct > 55:
             confluence['signal'] = 'SELL'
-            confluence['score'] = (confluence['bearish'] / total) * 100
+            confluence['score'] = bear_pct
         else:
             confluence['signal'] = 'NEUTRAL'
             confluence['score'] = 50
@@ -639,18 +882,32 @@ def calculate_confluence(data, tv_analysis, news_sentiment, fear_greed, analyst_
         confluence['signal'] = 'NEUTRAL'
         confluence['score'] = 50
 
-    # Confidence
-    agreeing = sum(1 for s in confluence['sources'].values() if s == confluence['signal'])
-    pct = agreeing / max(1, len(confluence['sources'])) * 100
+    # ===== CONFIDENCE LEVEL =====
 
-    if pct >= 75 and len(confluence['sources']) >= 5:
+    num_sources = len(confluence['sources'])
+    agreeing = sum(1 for s in confluence['sources'].values() if s == confluence['signal'])
+    agreement_pct = (agreeing / max(1, num_sources)) * 100
+
+    # More sources + higher agreement = higher confidence
+    if agreement_pct >= 80 and num_sources >= 15:
         confluence['confidence'] = 'VERY HIGH'
-    elif pct >= 60 and len(confluence['sources']) >= 4:
+    elif agreement_pct >= 70 and num_sources >= 12:
         confluence['confidence'] = 'HIGH'
-    elif pct >= 50:
+    elif agreement_pct >= 60 and num_sources >= 8:
         confluence['confidence'] = 'MODERATE'
-    else:
+    elif agreement_pct >= 50:
         confluence['confidence'] = 'LOW'
+    else:
+        confluence['confidence'] = 'VERY LOW'
+
+    # Store stats
+    confluence['stats'] = {
+        'total_sources': num_sources,
+        'agreeing': agreeing,
+        'agreement_pct': agreement_pct,
+        'bull_weight': confluence['bullish'],
+        'bear_weight': confluence['bearish']
+    }
 
     return confluence
 
