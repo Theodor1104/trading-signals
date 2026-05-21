@@ -132,6 +132,66 @@ st.markdown("""
     .bearish { color: #ef4444; }
     .neutral { color: #f59e0b; }
 
+    /* Fix dark/black backgrounds */
+    .stExpander {
+        background-color: #1a1f2e !important;
+        border: 1px solid #2d3748 !important;
+        border-radius: 8px !important;
+    }
+    .stExpander > div {
+        background-color: #1a1f2e !important;
+    }
+    [data-testid="stExpander"] {
+        background-color: #1a1f2e !important;
+    }
+    .streamlit-expanderHeader {
+        background-color: #1a1f2e !important;
+        color: #ffffff !important;
+    }
+    .streamlit-expanderContent {
+        background-color: #151922 !important;
+    }
+
+    /* Fix metric backgrounds */
+    [data-testid="stMetric"] {
+        background-color: #1a1f2e !important;
+        padding: 15px !important;
+        border-radius: 8px !important;
+        border: 1px solid #2d3748 !important;
+    }
+    [data-testid="stMetricLabel"] {
+        color: #9ca3af !important;
+    }
+
+    /* Fix selectbox and inputs */
+    .stSelectbox > div > div {
+        background-color: #1a1f2e !important;
+    }
+
+    /* Stock card clickable */
+    .stock-card {
+        background: #1a1f2e;
+        border: 1px solid #2d3748;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 8px 0;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .stock-card:hover {
+        border-color: #3b82f6;
+        background: #1e2433;
+    }
+    .stock-card-buy {
+        border-left: 4px solid #10b981;
+    }
+    .stock-card-sell {
+        border-left: 4px solid #ef4444;
+    }
+    .stock-card-neutral {
+        border-left: 4px solid #f59e0b;
+    }
+
     /* Watermark - large, transparent, aligned with nav */
     .watermark {
         position: fixed !important;
@@ -900,71 +960,303 @@ elif mode == "Scanner":
 
         if results:
             df = pd.DataFrame(results)
+            st.session_state['scan_results'] = results
 
             buy_df = df[df['Signal'] == 'BUY'].sort_values('Score', ascending=False)
             sell_df = df[df['Signal'] == 'SELL'].sort_values('Score', ascending=False)
+            neutral_df = df[df['Signal'] == 'NEUTRAL'].sort_values('Score', ascending=False)
 
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown(f"#### BUY SIGNALS ({len(buy_df)})")
-                if not buy_df.empty:
-                    for _, row in buy_df.head(10).iterrows():
-                        st.markdown(f"""
-                        <div style="padding: 10px; background: #1a1f2e; border-left: 3px solid #10b981; margin: 5px 0; border-radius: 4px;">
-                            <span style="font-weight: 600;">{row['Symbol']}</span>
-                            <span style="float: right; color: #10b981;">${row['Price']:.2f} ({row['Change']:+.1f}%)</span>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-            with col2:
-                st.markdown(f"#### SELL SIGNALS ({len(sell_df)})")
-                if not sell_df.empty:
-                    for _, row in sell_df.head(10).iterrows():
-                        st.markdown(f"""
-                        <div style="padding: 10px; background: #1a1f2e; border-left: 3px solid #ef4444; margin: 5px 0; border-radius: 4px;">
-                            <span style="font-weight: 600;">{row['Symbol']}</span>
-                            <span style="float: right; color: #ef4444;">${row['Price']:.2f} ({row['Change']:+.1f}%)</span>
-                        </div>
-                        """, unsafe_allow_html=True)
+            # Summary
+            col_sum1, col_sum2, col_sum3 = st.columns(3)
+            with col_sum1:
+                st.metric("BUY Signals", len(buy_df), delta=None)
+            with col_sum2:
+                st.metric("SELL Signals", len(sell_df), delta=None)
+            with col_sum3:
+                st.metric("NEUTRAL", len(neutral_df), delta=None)
 
             st.markdown("---")
-            st.markdown("#### ALL RESULTS")
-            st.dataframe(df.style.format({'Price': '${:.2f}', 'Change': '{:+.2f}%', 'RSI': '{:.1f}', 'Score': '{:.0f}%'}), use_container_width=True)
+
+            # Tabs for signals
+            tab_buy, tab_sell, tab_all = st.tabs(["BUY SIGNALS", "SELL SIGNALS", "ALL RESULTS"])
+
+            with tab_buy:
+                if not buy_df.empty:
+                    for _, row in buy_df.iterrows():
+                        with st.expander(f"**{row['Symbol']}** - ${row['Price']:.2f} ({row['Change']:+.1f}%) - Score: {row['Score']:.0f}%"):
+                            # Fetch detailed data for this stock
+                            detail_data = fetch_stock_data(row['Symbol'], period="3mo")
+                            if detail_data is not None and len(detail_data) >= 20:
+                                detail_data = calculate_indicators(detail_data)
+                                latest = detail_data.iloc[-1]
+
+                                col_d1, col_d2, col_d3, col_d4 = st.columns(4)
+                                with col_d1:
+                                    st.metric("RSI", f"{latest.get('rsi', 0):.1f}")
+                                with col_d2:
+                                    st.metric("MACD", "Bullish" if latest.get('macd_hist', 0) > 0 else "Bearish")
+                                with col_d3:
+                                    st.metric("Volume", f"{latest.get('volume', 0)/1e6:.1f}M")
+                                with col_d4:
+                                    st.metric("ATR %", f"{latest.get('atr_pct', 0):.2f}%")
+
+                                # Mini chart
+                                fig_mini = go.Figure()
+                                fig_mini.add_trace(go.Candlestick(
+                                    x=detail_data.index[-30:],
+                                    open=detail_data['open'][-30:],
+                                    high=detail_data['high'][-30:],
+                                    low=detail_data['low'][-30:],
+                                    close=detail_data['close'][-30:],
+                                    increasing_line_color='#10b981',
+                                    decreasing_line_color='#ef4444'
+                                ))
+                                fig_mini.update_layout(
+                                    height=250,
+                                    template='plotly_dark',
+                                    paper_bgcolor='#151922',
+                                    plot_bgcolor='#151922',
+                                    xaxis_rangeslider_visible=False,
+                                    margin=dict(l=0, r=0, t=10, b=0),
+                                    showlegend=False
+                                )
+                                st.plotly_chart(fig_mini, use_container_width=True)
+                else:
+                    st.info("No BUY signals found")
+
+            with tab_sell:
+                if not sell_df.empty:
+                    for _, row in sell_df.iterrows():
+                        with st.expander(f"**{row['Symbol']}** - ${row['Price']:.2f} ({row['Change']:+.1f}%) - Score: {row['Score']:.0f}%"):
+                            detail_data = fetch_stock_data(row['Symbol'], period="3mo")
+                            if detail_data is not None and len(detail_data) >= 20:
+                                detail_data = calculate_indicators(detail_data)
+                                latest = detail_data.iloc[-1]
+
+                                col_d1, col_d2, col_d3, col_d4 = st.columns(4)
+                                with col_d1:
+                                    st.metric("RSI", f"{latest.get('rsi', 0):.1f}")
+                                with col_d2:
+                                    st.metric("MACD", "Bullish" if latest.get('macd_hist', 0) > 0 else "Bearish")
+                                with col_d3:
+                                    st.metric("Volume", f"{latest.get('volume', 0)/1e6:.1f}M")
+                                with col_d4:
+                                    st.metric("ATR %", f"{latest.get('atr_pct', 0):.2f}%")
+
+                                fig_mini = go.Figure()
+                                fig_mini.add_trace(go.Candlestick(
+                                    x=detail_data.index[-30:],
+                                    open=detail_data['open'][-30:],
+                                    high=detail_data['high'][-30:],
+                                    low=detail_data['low'][-30:],
+                                    close=detail_data['close'][-30:],
+                                    increasing_line_color='#10b981',
+                                    decreasing_line_color='#ef4444'
+                                ))
+                                fig_mini.update_layout(
+                                    height=250,
+                                    template='plotly_dark',
+                                    paper_bgcolor='#151922',
+                                    plot_bgcolor='#151922',
+                                    xaxis_rangeslider_visible=False,
+                                    margin=dict(l=0, r=0, t=10, b=0),
+                                    showlegend=False
+                                )
+                                st.plotly_chart(fig_mini, use_container_width=True)
+                else:
+                    st.info("No SELL signals found")
+
+            with tab_all:
+                st.dataframe(
+                    df.style.format({'Price': '${:.2f}', 'Change': '{:+.2f}%', 'RSI': '{:.1f}', 'Score': '{:.0f}%'}),
+                    use_container_width=True
+                )
 
 else:  # Market Overview
     st.markdown("### MARKET OVERVIEW")
 
-    progress = st.progress(0)
-    industries = list(INDUSTRIES.items()) if market == "Stocks" else [("Crypto", CRYPTO_SYMBOLS[:10])]
+    if market == "Stocks":
+        industries_list = list(INDUSTRIES.items())
+    elif market == "Crypto":
+        industries_list = [("Crypto", CRYPTO_SYMBOLS)]
+    else:
+        industries_list = [("Forex", FOREX_PAIRS)]
 
-    overview = []
-    for i, (name, stocks) in enumerate(industries):
-        progress.progress((i + 1) / len(industries))
-        buy, sell = 0, 0
-        for sym in stocks[:5]:
-            try:
-                data = fetch_stock_data(sym)
-                if data is not None and len(data) >= 50:
-                    data = calculate_indicators(data)
-                    conf = calculate_confluence(data, None, 0, None, None)
-                    if conf['signal'] == 'BUY': buy += 1
-                    elif conf['signal'] == 'SELL': sell += 1
-            except:
-                continue
-        overview.append({'Sector': name, 'Buy': buy, 'Sell': sell, 'Sentiment': 'Bullish' if buy > sell else 'Bearish' if sell > buy else 'Neutral'})
+    # Scan button
+    if st.button("SCAN ALL SECTORS", type="primary"):
+        progress = st.progress(0)
+        overview = []
+        sector_details = {}
 
-    progress.empty()
+        for i, (name, stocks) in enumerate(industries_list):
+            progress.progress((i + 1) / len(industries_list))
+            buy, sell, neutral = 0, 0, 0
+            sector_stocks = []
 
-    df = pd.DataFrame(overview)
+            for sym in stocks[:10]:  # Top 10 per sector
+                try:
+                    data = fetch_stock_data(sym, period="3mo")
+                    if data is not None and len(data) >= 50:
+                        data = calculate_indicators(data)
+                        conf = calculate_confluence(data, None, 0, None, None)
+                        latest = data.iloc[-1]
+                        prev = data.iloc[-2]
+                        change = ((latest['close'] / prev['close']) - 1) * 100
 
-    fig = go.Figure()
-    fig.add_trace(go.Bar(name='Buy', x=df['Sector'], y=df['Buy'], marker_color='#10b981'))
-    fig.add_trace(go.Bar(name='Sell', x=df['Sector'], y=df['Sell'], marker_color='#ef4444'))
-    fig.update_layout(barmode='group', height=400, template='plotly_dark', paper_bgcolor='#0e1117', plot_bgcolor='#0e1117')
-    st.plotly_chart(fig, use_container_width=True)
+                        stock_info = {
+                            'symbol': sym,
+                            'price': latest['close'],
+                            'change': change,
+                            'rsi': latest.get('rsi', 0),
+                            'signal': conf['signal'],
+                            'score': conf.get('score', 50)
+                        }
+                        sector_stocks.append(stock_info)
 
-    st.dataframe(df, use_container_width=True)
+                        if conf['signal'] == 'BUY': buy += 1
+                        elif conf['signal'] == 'SELL': sell += 1
+                        else: neutral += 1
+                except:
+                    continue
+
+            sector_details[name] = sector_stocks
+            sentiment = 'Bullish' if buy > sell else 'Bearish' if sell > buy else 'Neutral'
+            overview.append({
+                'Sector': name,
+                'Buy': buy,
+                'Sell': sell,
+                'Neutral': neutral,
+                'Sentiment': sentiment
+            })
+
+        progress.empty()
+        st.session_state['overview_data'] = overview
+        st.session_state['sector_details'] = sector_details
+
+    # Display results if available
+    if 'overview_data' in st.session_state:
+        overview = st.session_state['overview_data']
+        sector_details = st.session_state.get('sector_details', {})
+        df = pd.DataFrame(overview)
+
+        # Chart
+        fig = go.Figure()
+        fig.add_trace(go.Bar(name='Buy', x=df['Sector'], y=df['Buy'], marker_color='#10b981'))
+        fig.add_trace(go.Bar(name='Sell', x=df['Sector'], y=df['Sell'], marker_color='#ef4444'))
+        fig.add_trace(go.Bar(name='Neutral', x=df['Sector'], y=df['Neutral'], marker_color='#6b7280'))
+        fig.update_layout(
+            barmode='group',
+            height=350,
+            template='plotly_dark',
+            paper_bgcolor='#0e1117',
+            plot_bgcolor='#0e1117',
+            legend=dict(orientation="h", yanchor="bottom", y=1.02)
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("---")
+        st.markdown("### SECTOR DETAILS")
+        st.caption("Click on a sector to see individual stocks")
+
+        # Expandable sectors
+        for sector_data in overview:
+            sector_name = sector_data['Sector']
+            sentiment = sector_data['Sentiment']
+            sentiment_color = "#10b981" if sentiment == "Bullish" else "#ef4444" if sentiment == "Bearish" else "#f59e0b"
+
+            with st.expander(f"**{sector_name}** - {sentiment} ({sector_data['Buy']} Buy / {sector_data['Sell']} Sell)"):
+                if sector_name in sector_details:
+                    stocks_in_sector = sector_details[sector_name]
+
+                    if stocks_in_sector:
+                        # Sort by signal
+                        buy_stocks = [s for s in stocks_in_sector if s['signal'] == 'BUY']
+                        sell_stocks = [s for s in stocks_in_sector if s['signal'] == 'SELL']
+                        neutral_stocks = [s for s in stocks_in_sector if s['signal'] == 'NEUTRAL']
+
+                        col_b, col_s = st.columns(2)
+
+                        with col_b:
+                            st.markdown("**BUY Signals:**")
+                            for stock in buy_stocks:
+                                st.markdown(f"""
+                                <div style="padding: 8px 12px; background: #1a1f2e; border-left: 3px solid #10b981; margin: 4px 0; border-radius: 4px;">
+                                    <span style="font-weight: 600; color: #fff;">{stock['symbol']}</span>
+                                    <span style="float: right; color: #10b981;">${stock['price']:.2f} ({stock['change']:+.1f}%)</span>
+                                    <br><span style="font-size: 12px; color: #9ca3af;">RSI: {stock['rsi']:.1f} | Score: {stock['score']:.0f}%</span>
+                                </div>
+                                """, unsafe_allow_html=True)
+
+                        with col_s:
+                            st.markdown("**SELL Signals:**")
+                            for stock in sell_stocks:
+                                st.markdown(f"""
+                                <div style="padding: 8px 12px; background: #1a1f2e; border-left: 3px solid #ef4444; margin: 4px 0; border-radius: 4px;">
+                                    <span style="font-weight: 600; color: #fff;">{stock['symbol']}</span>
+                                    <span style="float: right; color: #ef4444;">${stock['price']:.2f} ({stock['change']:+.1f}%)</span>
+                                    <br><span style="font-size: 12px; color: #9ca3af;">RSI: {stock['rsi']:.1f} | Score: {stock['score']:.0f}%</span>
+                                </div>
+                                """, unsafe_allow_html=True)
+
+                        # Show individual stock charts on click
+                        st.markdown("---")
+                        selected_stock = st.selectbox(
+                            "View chart for:",
+                            [s['symbol'] for s in stocks_in_sector],
+                            key=f"select_{sector_name}"
+                        )
+
+                        if selected_stock:
+                            chart_data = fetch_stock_data(selected_stock, period="3mo")
+                            if chart_data is not None and len(chart_data) >= 20:
+                                chart_data = calculate_indicators(chart_data)
+
+                                fig_stock = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                                    vertical_spacing=0.05, row_heights=[0.7, 0.3])
+
+                                fig_stock.add_trace(go.Candlestick(
+                                    x=chart_data.index,
+                                    open=chart_data['open'],
+                                    high=chart_data['high'],
+                                    low=chart_data['low'],
+                                    close=chart_data['close'],
+                                    increasing_line_color='#10b981',
+                                    decreasing_line_color='#ef4444',
+                                    name='Price'
+                                ), row=1, col=1)
+
+                                # Add SMA
+                                fig_stock.add_trace(go.Scatter(
+                                    x=chart_data.index,
+                                    y=chart_data['sma_20'],
+                                    line=dict(color='#f59e0b', width=1),
+                                    name='SMA 20'
+                                ), row=1, col=1)
+
+                                # RSI
+                                fig_stock.add_trace(go.Scatter(
+                                    x=chart_data.index,
+                                    y=chart_data['rsi'],
+                                    line=dict(color='#8b5cf6', width=1),
+                                    name='RSI'
+                                ), row=2, col=1)
+                                fig_stock.add_hline(y=70, line_dash="dash", line_color="#ef4444", row=2, col=1)
+                                fig_stock.add_hline(y=30, line_dash="dash", line_color="#10b981", row=2, col=1)
+
+                                fig_stock.update_layout(
+                                    height=400,
+                                    template='plotly_dark',
+                                    paper_bgcolor='#151922',
+                                    plot_bgcolor='#151922',
+                                    xaxis_rangeslider_visible=False,
+                                    margin=dict(l=0, r=0, t=10, b=0),
+                                    showlegend=False
+                                )
+                                st.plotly_chart(fig_stock, use_container_width=True)
+                    else:
+                        st.info("No data available for this sector")
+                else:
+                    st.info("Scan required to view details")
 
 # Auto-refresh
 if auto_refresh:
