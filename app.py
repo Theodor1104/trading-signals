@@ -962,21 +962,29 @@ def render_full_panel(symbol, panel_id=0, is_compact=False):
     price = latest['close']
     change = ((price / prev['close']) - 1) * 100
 
+    # Get company info
+    stock_info = get_stock_info(symbol)
+    company_name = stock_info.get('name', symbol) if stock_info else symbol
+    sector = stock_info.get('sector', '') if stock_info else ''
+
     # Get analysis data
     confluence = calculate_confluence(data, None, 0, None, None)
     signal = confluence['signal']
     score = confluence['score']
     risk = calculate_risk(data)
 
-    # Header with signal
+    # Header with company name and signal
     signal_color = "#10b981" if signal == "BUY" else "#ef4444" if signal == "SELL" else "#f59e0b"
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, #1a1f2e 0%, #151922 100%); padding: 15px; border-radius: 10px; border-left: 5px solid {signal_color}; margin-bottom: 15px;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 24px; font-weight: 800; color: #fff;">{symbol}</span>
+            <div>
+                <p style="margin: 0; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 1px;">{symbol} {('| ' + sector) if sector else ''}</p>
+                <h2 style="margin: 5px 0 0 0; font-size: 22px; font-weight: 800; color: #fff;">{company_name}</h2>
+            </div>
             <span style="font-size: 18px; font-weight: 700; color: {signal_color}; background: rgba(0,0,0,0.3); padding: 5px 15px; border-radius: 20px;">{signal} {score:.0f}%</span>
         </div>
-        <div style="margin-top: 8px;">
+        <div style="margin-top: 10px;">
             <span style="font-size: 28px; font-weight: 700; color: #fff;">${price:.2f}</span>
             <span style="font-size: 16px; font-weight: 600; color: {'#10b981' if change >= 0 else '#ef4444'}; margin-left: 15px;">{change:+.2f}%</span>
         </div>
@@ -1210,32 +1218,54 @@ if mode == "Analysis":
             # Results header
             st.markdown("---")
 
+            # Company name header
+            company_name = stock_info.get('name', symbol) if stock_info else symbol
+            sector = stock_info.get('sector', '') if stock_info else ''
+            signal = confluence['signal']
+            score = confluence['score']
+            signal_color = "#10b981" if signal == "BUY" else "#ef4444" if signal == "SELL" else "#f59e0b"
+
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #1a1f2e 0%, #151922 100%); padding: 20px; border-radius: 12px; border-left: 6px solid {signal_color}; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <p style="margin: 0; font-size: 14px; color: #6b7280; text-transform: uppercase; letter-spacing: 2px;">{symbol} {('| ' + sector) if sector else ''}</p>
+                        <h1 style="margin: 8px 0; font-size: 32px; font-weight: 800; color: #fff;">{company_name}</h1>
+                        <div style="margin-top: 10px;">
+                            <span style="font-size: 36px; font-weight: 700; color: #fff;">${price:,.2f}</span>
+                            <span style="font-size: 18px; font-weight: 600; color: {'#10b981' if change >= 0 else '#ef4444'}; margin-left: 15px;">{change:+.2f}%</span>
+                        </div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="background: {signal_color}; padding: 15px 30px; border-radius: 12px;">
+                            <p style="margin: 0; font-size: 28px; font-weight: 800; color: white;">{signal}</p>
+                            <p style="margin: 5px 0 0 0; font-size: 16px; color: rgba(255,255,255,0.9);">{score:.0f}% Score</p>
+                        </div>
+                        <p style="margin: 10px 0 0 0; font-size: 14px; color: #9ca3af;">Confidence: <b style="color: #fff;">{confluence['confidence']}</b></p>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
             # Top metrics row
-            col1, col2, col3, col4, col5 = st.columns(5)
+            col1, col2, col3, col4 = st.columns(4)
 
             with col1:
-                signal = confluence['signal']
-                score = confluence['score']
-                if signal == 'BUY':
-                    st.markdown(f"""<div class="signal-buy"><h3 style="color: white; margin: 0;">BUY</h3><p style="color: #d1fae5; margin: 0;">{score:.0f}% Score</p></div>""", unsafe_allow_html=True)
-                elif signal == 'SELL':
-                    st.markdown(f"""<div class="signal-sell"><h3 style="color: white; margin: 0;">SELL</h3><p style="color: #fecaca; margin: 0;">{score:.0f}% Score</p></div>""", unsafe_allow_html=True)
-                else:
-                    st.markdown(f"""<div class="signal-neutral"><h3 style="color: white; margin: 0;">HOLD</h3><p style="color: #fef3c7; margin: 0;">Neutral</p></div>""", unsafe_allow_html=True)
+                rsi_val = latest.get('rsi', 0)
+                rsi_status = "Oversold" if rsi_val < 30 else "Overbought" if rsi_val > 70 else "Neutral"
+                st.metric("RSI (14)", f"{rsi_val:.1f}", rsi_status)
 
             with col2:
-                st.metric("Price", f"${price:,.2f}", f"{change:+.2f}%")
+                macd_h = latest.get('macd_hist', 0)
+                st.metric("MACD", "Bullish" if macd_h > 0 else "Bearish")
 
             with col3:
-                st.metric("Confidence", confluence['confidence'])
-
-            with col4:
-                rsi_val = latest.get('rsi', 0)
-                st.metric("RSI (14)", f"{rsi_val:.1f}")
-
-            with col5:
                 if risk:
                     st.metric("Volatility", f"{risk['volatility']:.1f}%")
+
+            with col4:
+                adx_val = latest.get('adx', 0)
+                st.metric("ADX", f"{adx_val:.1f}", "Strong" if adx_val > 25 else "Weak")
 
             # Signal sources
             st.markdown("---")
@@ -1429,7 +1459,18 @@ elif mode == "Scanner":
                 if not buy_df.empty:
                     for _, row in buy_df.iterrows():
                         with st.expander(f"**{row['Symbol']}** - ${row['Price']:.2f} ({row['Change']:+.1f}%) - Score: {row['Score']:.0f}%"):
-                            # Fetch detailed data for this stock
+                            # Fetch company info and detailed data
+                            stock_info = get_stock_info(row['Symbol'])
+                            company_name = stock_info.get('name', row['Symbol']) if stock_info else row['Symbol']
+                            sector = stock_info.get('sector', '') if stock_info else ''
+
+                            st.markdown(f"""
+                            <div style="margin-bottom: 15px;">
+                                <p style="margin: 0; font-size: 12px; color: #6b7280;">{row['Symbol']} {('| ' + sector) if sector else ''}</p>
+                                <h3 style="margin: 5px 0; color: #fff;">{company_name}</h3>
+                            </div>
+                            """, unsafe_allow_html=True)
+
                             detail_data = fetch_stock_data(row['Symbol'], period="3mo")
                             if detail_data is not None and len(detail_data) >= 20:
                                 detail_data = calculate_indicators(detail_data)
@@ -1473,6 +1514,18 @@ elif mode == "Scanner":
                 if not sell_df.empty:
                     for _, row in sell_df.iterrows():
                         with st.expander(f"**{row['Symbol']}** - ${row['Price']:.2f} ({row['Change']:+.1f}%) - Score: {row['Score']:.0f}%"):
+                            # Fetch company info
+                            stock_info = get_stock_info(row['Symbol'])
+                            company_name = stock_info.get('name', row['Symbol']) if stock_info else row['Symbol']
+                            sector = stock_info.get('sector', '') if stock_info else ''
+
+                            st.markdown(f"""
+                            <div style="margin-bottom: 15px;">
+                                <p style="margin: 0; font-size: 12px; color: #6b7280;">{row['Symbol']} {('| ' + sector) if sector else ''}</p>
+                                <h3 style="margin: 5px 0; color: #fff;">{company_name}</h3>
+                            </div>
+                            """, unsafe_allow_html=True)
+
                             detail_data = fetch_stock_data(row['Symbol'], period="3mo")
                             if detail_data is not None and len(detail_data) >= 20:
                                 detail_data = calculate_indicators(detail_data)
