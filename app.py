@@ -52,7 +52,6 @@ if not db.get_setting('twilio_to'):
 
 def sync_watchlist_to_github():
     """Sync watchlist and holdings to watchlist.json for GitHub Actions"""
-    import subprocess
     try:
         watchlist = db.get_watchlist()
         holdings = db.get_holdings()
@@ -63,16 +62,11 @@ def sync_watchlist_to_github():
             "last_updated": datetime.now().isoformat()
         }
 
-        # Save to JSON
+        # Save to JSON only - push manually with: git push origin main
         with open('watchlist.json', 'w') as f:
             json.dump(data, f, indent=2)
-
-        # Auto-commit and push to GitHub
-        subprocess.run(['git', 'add', 'watchlist.json'], capture_output=True)
-        subprocess.run(['git', 'commit', '-m', 'Auto-sync watchlist'], capture_output=True)
-        subprocess.run(['git', 'push'], capture_output=True)
-    except Exception as e:
-        pass  # Silent fail - don't break app if git fails
+    except:
+        pass  # Silent fail
 
 # TradingView Technical Analysis
 try:
@@ -346,33 +340,9 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ===== PASSWORD PROTECTION =====
-def check_password():
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
-
-    if st.session_state.authenticated:
-        return True
-
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.markdown("<h1 style='text-align: center; margin-top: 100px;'>TRADING SIGNALS PRO</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #6b7280;'>Professional Market Analysis Platform</p>", unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        password = st.text_input("Access Code", type="password", key="password_input")
-
-        if st.button("ENTER", use_container_width=True):
-            if password == "Money":
-                st.session_state.authenticated = True
-                st.rerun()
-            else:
-                st.error("Invalid access code")
-
-    return False
-
-if not check_password():
-    st.stop()
+# ===== PASSWORD PROTECTION (DISABLED FOR DEV) =====
+# def check_password():
+#     return True
 
 # ===== DATA FUNCTIONS =====
 @st.cache_data(ttl=60)

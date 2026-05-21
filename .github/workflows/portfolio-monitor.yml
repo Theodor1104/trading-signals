@@ -25,7 +25,7 @@ jobs:
         run: |
           pip install yfinance pandas ta twilio
 
-      - name: Run portfolio monitor
+      - name: Run portfolio monitor (SELL alerts)
         env:
           TWILIO_SID: ${{ secrets.TWILIO_SID }}
           TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
@@ -33,6 +33,15 @@ jobs:
           TWILIO_TO: ${{ secrets.TWILIO_TO }}
         run: |
           python cloud_monitor.py
+
+      - name: Run golden opportunity scanner (BUY alerts)
+        env:
+          TWILIO_SID: ${{ secrets.TWILIO_SID }}
+          TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
+          TWILIO_FROM: ${{ secrets.TWILIO_FROM }}
+          TWILIO_TO: ${{ secrets.TWILIO_TO }}
+        run: |
+          python golden_scanner.py
 
       - name: Save signal state
         uses: actions/upload-artifact@v4
