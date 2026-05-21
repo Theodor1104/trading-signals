@@ -4,8 +4,14 @@ Trading Platform Configuration - Comprehensive Stock & Crypto Lists
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from enum import Enum
 
 load_dotenv()
+
+# Trading Mode Enum
+class TradingMode(Enum):
+    PAPER = "paper"
+    LIVE = "live"
 
 # Paths
 BASE_DIR = Path(__file__).parent
