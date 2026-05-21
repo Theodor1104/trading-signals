@@ -137,14 +137,19 @@ DANISH_STOCKS = [
     "ROCK-B.CO", "FLS.CO", "ISS.CO", "GN.CO", "AMBU-B.CO",
     # Other
     "RBREW.CO", "NNIT.CO", "NETC.CO", "CHEMM.CO",
-    "RILBA.CO", "MATAS.CO", "ALK-B.CO", "BAVA.CO",
+    "RILBA.CO", "MATAS.CO", "ALK-B.CO", "BAVA.CO", "HH.CO",
+]
+
+# UK Stocks
+UK_STOCKS = [
+    "RR.L",  # Rolls-Royce Holdings PLC
 ]
 
 # All stocks combined
 ALL_STOCKS = (
     TECH_STOCKS + HEALTHCARE_STOCKS + FINANCE_STOCKS + ENERGY_STOCKS +
     CONSUMER_STOCKS + INDUSTRIAL_STOCKS + COMMUNICATION_STOCKS +
-    MATERIALS_STOCKS + REAL_ESTATE_STOCKS + DANISH_STOCKS
+    MATERIALS_STOCKS + REAL_ESTATE_STOCKS + DANISH_STOCKS + UK_STOCKS
 )
 
 # Industry mapping
@@ -159,6 +164,7 @@ INDUSTRIES = {
     "Materials": MATERIALS_STOCKS,
     "Real Estate": REAL_ESTATE_STOCKS,
     "Danish": DANISH_STOCKS,
+    "UK": UK_STOCKS,
 }
 
 # ===== CRYPTO (Yahoo Finance format) =====
@@ -352,4 +358,7 @@ COMPANY_NAMES = {
     "CARL-B.CO": "Carlsberg",
     "PNDORA.CO": "Pandora",
     "DANSKE.CO": "Danske Bank",
+    # Added
+    "HH.CO": "H+H International",
+    "RR.L": "Rolls-Royce Holdings PLC",
 }
