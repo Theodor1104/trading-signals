@@ -1,9 +1,9 @@
 name: Portfolio Monitor
 
 on:
-  # Run every 10 minutes during US market hours (9:30-16:00 ET = 14:30-21:00 UTC)
+  # Run every 5 minutes during US market hours (9:30-16:00 ET = 14:30-21:00 UTC)
   schedule:
-    - cron: '*/10 14-21 * * 1-5'  # Every 10 min, Mon-Fri, during market hours
+    - cron: '*/5 14-21 * * 1-5'  # Every 5 min, Mon-Fri, during market hours
 
   # Allow manual trigger
   workflow_dispatch:
