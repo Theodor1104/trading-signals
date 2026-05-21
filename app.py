@@ -1141,7 +1141,7 @@ with st.sidebar:
     view_mode = st.radio("", ["Normal", "2-Split", "4-Split"], label_visibility="collapsed", horizontal=True)
 
     st.markdown("---")
-    auto_refresh = st.checkbox("Auto-refresh (30s)")
+    auto_refresh = st.checkbox("Auto-refresh (30s)", value=True)
 
     if market == "Crypto":
         fg = get_fear_greed_index()
