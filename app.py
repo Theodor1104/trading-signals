@@ -1130,7 +1130,7 @@ st.markdown("""
 # Sidebar
 with st.sidebar:
     st.markdown("### NAVIGATION")
-    mode = st.radio("", ["Analysis", "Scanner", "Market Overview", "Portfolio", "Tools", "Alerts", "Calendar"], label_visibility="collapsed")
+    mode = st.radio("", ["Dashboard", "Analysis", "Scanner", "Market Overview", "Portfolio", "Tools", "Alerts", "Calendar"], label_visibility="collapsed")
 
     st.markdown("---")
     st.markdown("### MARKET")
@@ -1153,7 +1153,209 @@ with st.sidebar:
             st.caption(fg['label'])
 
 # Main content
-if mode == "Analysis":
+
+# ===== AUTOMATED DASHBOARD =====
+if mode == "Dashboard":
+    st.markdown("### AUTOMATED TRADING DASHBOARD")
+    st.caption("Alt du behøver på ét sted - opdateres automatisk")
+
+    # Auto-scan function for dashboard
+    @st.cache_data(ttl=300)
+    def auto_scan_opportunities(symbols, limit=10):
+        """Automatically scan for best opportunities"""
+        results = []
+        for sym in symbols[:50]:  # Limit for speed
+            try:
+                data = fetch_stock_data(sym, period="3mo")
+                if data is None or len(data) < 20:
+                    continue
+                data = calculate_indicators(data)
+                conf = calculate_confluence(data, None, 0, None, None)
+                latest = data.iloc[-1]
+                prev = data.iloc[-2]
+                price = latest['close']
+                change = ((price / prev['close']) - 1) * 100
+
+                results.append({
+                    'symbol': sym,
+                    'price': price,
+                    'change': change,
+                    'signal': conf['signal'],
+                    'score': conf['score'],
+                    'rsi': latest.get('rsi', 50),
+                    'confidence': conf.get('confidence', 'MODERATE')
+                })
+            except:
+                continue
+        return sorted(results, key=lambda x: x['score'], reverse=True)[:limit]
+
+    # Dashboard layout
+    col_main, col_side = st.columns([3, 1])
+
+    with col_side:
+        # Market Sentiment
+        st.markdown("#### MARKET PULSE")
+        fg = get_fear_greed_index()
+        if fg:
+            fg_color = "#10b981" if fg['value'] < 40 else "#ef4444" if fg['value'] > 60 else "#f59e0b"
+            st.markdown(f"""
+            <div style="background: #1a1f2e; padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 10px;">
+                <p style="margin: 0; color: #6b7280; font-size: 11px;">FEAR & GREED</p>
+                <h2 style="margin: 5px 0; color: {fg_color};">{fg['value']}</h2>
+                <p style="margin: 0; color: {fg_color}; font-size: 12px;">{fg['label']}</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Portfolio Summary
+        holdings = db.get_holdings()
+        if holdings:
+            total_value = 0
+            total_pnl = 0
+            for h in holdings:
+                try:
+                    ticker = yf.Ticker(h['symbol'])
+                    current = ticker.history(period="1d")['Close'].iloc[-1]
+                    value = current * h['quantity']
+                    cost = h['avg_price'] * h['quantity']
+                    total_value += value
+                    total_pnl += (value - cost)
+                except:
+                    pass
+
+            pnl_color = "#10b981" if total_pnl >= 0 else "#ef4444"
+            st.markdown(f"""
+            <div style="background: #1a1f2e; padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 10px;">
+                <p style="margin: 0; color: #6b7280; font-size: 11px;">DIN PORTFOLIO</p>
+                <h3 style="margin: 5px 0; color: #fff;">${total_value:,.0f}</h3>
+                <p style="margin: 0; color: {pnl_color}; font-size: 14px;">{'+' if total_pnl >= 0 else ''}${total_pnl:,.0f}</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Active Alerts
+        active_alerts = db.get_alerts(active_only=True)
+        st.markdown(f"""
+        <div style="background: #1a1f2e; padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 10px;">
+            <p style="margin: 0; color: #6b7280; font-size: 11px;">AKTIVE ALERTS</p>
+            <h3 style="margin: 5px 0; color: #fff;">{len(active_alerts)}</h3>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Watchlist count
+        watchlist = db.get_watchlist()
+        st.markdown(f"""
+        <div style="background: #1a1f2e; padding: 15px; border-radius: 8px; text-align: center;">
+            <p style="margin: 0; color: #6b7280; font-size: 11px;">WATCHLIST</p>
+            <h3 style="margin: 5px 0; color: #fff;">{len(watchlist)}</h3>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col_main:
+        # Auto-scan button
+        if st.button("🔄 SCAN FOR OPPORTUNITIES", type="primary", use_container_width=True):
+            st.session_state['dashboard_scanned'] = True
+
+        if st.session_state.get('dashboard_scanned', False) or True:
+            with st.spinner("Scanner markeder for de bedste muligheder..."):
+                # Scan stocks
+                top_stocks = auto_scan_opportunities(ALL_STOCKS[:100])
+                top_crypto = auto_scan_opportunities(CRYPTO_SYMBOLS)
+
+            # TOP BUY OPPORTUNITIES
+            st.markdown("#### 🚀 TOP KØB MULIGHEDER")
+            buy_opps = [r for r in top_stocks + top_crypto if r['signal'] == 'BUY' and r['score'] >= 60]
+            buy_opps = sorted(buy_opps, key=lambda x: x['score'], reverse=True)[:5]
+
+            if buy_opps:
+                for opp in buy_opps:
+                    score_color = "#10b981" if opp['score'] >= 70 else "#f59e0b"
+                    conf_badge = "🔥" if opp['confidence'] == 'VERY HIGH' else "⭐" if opp['confidence'] == 'HIGH' else ""
+
+                    col_o1, col_o2, col_o3, col_o4, col_o5 = st.columns([2, 2, 1.5, 2, 1.5])
+                    with col_o1:
+                        st.markdown(f"**{opp['symbol']}** {conf_badge}")
+                    with col_o2:
+                        st.markdown(f"${opp['price']:.2f}")
+                    with col_o3:
+                        chg_color = "#10b981" if opp['change'] >= 0 else "#ef4444"
+                        st.markdown(f"<span style='color:{chg_color}'>{opp['change']:+.1f}%</span>", unsafe_allow_html=True)
+                    with col_o4:
+                        st.markdown(f"<span style='color:{score_color}'>BUY {opp['score']:.0f}%</span>", unsafe_allow_html=True)
+                    with col_o5:
+                        if st.button("+ Watch", key=f"add_{opp['symbol']}"):
+                            market_type = "Crypto" if "-USD" in opp['symbol'] else "Stocks"
+                            db.add_to_watchlist(opp['symbol'], market_type)
+                            st.rerun()
+            else:
+                st.info("Ingen stærke køb signaler fundet lige nu.")
+
+            st.markdown("---")
+
+            # TOP SELL SIGNALS (for watchlist)
+            st.markdown("#### ⚠️ SÆLG SIGNALER (Fra Watchlist)")
+            watchlist_symbols = [w['symbol'] for w in watchlist]
+            if watchlist_symbols:
+                watchlist_scan = auto_scan_opportunities(watchlist_symbols, limit=20)
+                sell_signals = [r for r in watchlist_scan if r['signal'] == 'SELL']
+
+                if sell_signals:
+                    for sig in sell_signals[:5]:
+                        col_s1, col_s2, col_s3, col_s4 = st.columns([2, 2, 2, 2])
+                        with col_s1:
+                            st.markdown(f"**{sig['symbol']}**")
+                        with col_s2:
+                            st.markdown(f"${sig['price']:.2f}")
+                        with col_s3:
+                            st.markdown(f"<span style='color:#ef4444'>SELL {sig['score']:.0f}%</span>", unsafe_allow_html=True)
+                        with col_s4:
+                            st.markdown(f"RSI: {sig['rsi']:.0f}")
+                else:
+                    st.success("✓ Ingen sælg signaler i din watchlist")
+            else:
+                st.caption("Tilføj aktier til watchlist for at få sælg alerts")
+
+            st.markdown("---")
+
+            # QUICK ACTIONS
+            st.markdown("#### ⚡ HURTIGE HANDLINGER")
+            col_act1, col_act2, col_act3, col_act4 = st.columns(4)
+            with col_act1:
+                if st.button("📊 Fuld Scan", use_container_width=True):
+                    st.session_state['go_to'] = 'Scanner'
+                    st.rerun()
+            with col_act2:
+                if st.button("💼 Portfolio", use_container_width=True):
+                    st.session_state['go_to'] = 'Portfolio'
+                    st.rerun()
+            with col_act3:
+                if st.button("🔔 Alerts", use_container_width=True):
+                    st.session_state['go_to'] = 'Alerts'
+                    st.rerun()
+            with col_act4:
+                if st.button("📈 Backtest", use_container_width=True):
+                    st.session_state['go_to'] = 'Tools'
+                    st.rerun()
+
+            # TODAY'S MOVERS from watchlist
+            if watchlist_symbols:
+                st.markdown("---")
+                st.markdown("#### 📈 DIN WATCHLIST I DAG")
+                watchlist_data = auto_scan_opportunities(watchlist_symbols, limit=20)
+                if watchlist_data:
+                    for item in watchlist_data[:8]:
+                        signal_color = "#10b981" if item['signal'] == "BUY" else "#ef4444" if item['signal'] == "SELL" else "#f59e0b"
+                        chg_color = "#10b981" if item['change'] >= 0 else "#ef4444"
+
+                        col_w1, col_w2, col_w3, col_w4 = st.columns([2, 2, 2, 2])
+                        with col_w1:
+                            st.markdown(f"**{item['symbol']}**")
+                        with col_w2:
+                            st.markdown(f"${item['price']:.2f}")
+                        with col_w3:
+                            st.markdown(f"<span style='color:{chg_color}'>{item['change']:+.2f}%</span>", unsafe_allow_html=True)
+                        with col_w4:
+                            st.markdown(f"<span style='color:{signal_color}'>{item['signal']} {item['score']:.0f}%</span>", unsafe_allow_html=True)
+
+elif mode == "Analysis":
 
     # Determine number of panels based on view mode
     if view_mode == "4-Split":
