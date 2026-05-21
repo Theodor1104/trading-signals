@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import plotly.express as px
 from datetime import datetime, timedelta
 import yfinance as yf
 import ta
@@ -13,6 +14,37 @@ import requests
 import feedparser
 from textblob import TextBlob
 import time
+import json
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import io
+
+# Database
+from journal.database import JournalDB
+
+# PDF/Excel exports
+try:
+    from fpdf import FPDF
+    PDF_AVAILABLE = True
+except ImportError:
+    PDF_AVAILABLE = False
+
+try:
+    import openpyxl
+    EXCEL_AVAILABLE = True
+except ImportError:
+    EXCEL_AVAILABLE = False
+
+# Twilio for SMS
+try:
+    from twilio.rest import Client as TwilioClient
+    TWILIO_AVAILABLE = True
+except ImportError:
+    TWILIO_AVAILABLE = False
+
+# Initialize database
+db = JournalDB()
 
 # TradingView Technical Analysis
 try:
@@ -975,6 +1007,12 @@ def render_full_panel(symbol, panel_id=0, is_compact=False):
     score = confluence['score']
     risk = calculate_risk(data)
 
+    # Auto-log signal to history
+    try:
+        db.log_signal(symbol, market, signal, score, price)
+    except:
+        pass  # Silently fail if logging doesn't work
+
     # Header with company name and signal
     signal_color = "#10b981" if signal == "BUY" else "#ef4444" if signal == "SELL" else "#f59e0b"
     st.markdown(f"""
@@ -1092,7 +1130,7 @@ st.markdown("""
 # Sidebar
 with st.sidebar:
     st.markdown("### NAVIGATION")
-    mode = st.radio("", ["Analysis", "Scanner", "Market Overview"], label_visibility="collapsed")
+    mode = st.radio("", ["Analysis", "Scanner", "Market Overview", "Portfolio", "Tools", "Alerts", "Calendar"], label_visibility="collapsed")
 
     st.markdown("---")
     st.markdown("### MARKET")
@@ -1286,7 +1324,7 @@ if mode == "Analysis":
 
             # Tabs
             st.markdown("---")
-            tab1, tab2, tab3, tab4 = st.tabs(["CHART", "INDICATORS", "RISK", "NEWS"])
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["CHART", "INDICATORS", "RISK", "NEWS", "INSIDERS", "OPTIONS"])
 
             with tab1:
                 fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05,
@@ -1397,6 +1435,129 @@ if mode == "Analysis":
                 else:
                     st.info("No recent news found")
 
+            with tab5:
+                # Insider Trading Data
+                if market == "Stocks":
+                    try:
+                        ticker = yf.Ticker(symbol)
+                        insider_purchases = ticker.insider_purchases
+                        insider_transactions = ticker.insider_transactions
+
+                        if insider_purchases is not None and not insider_purchases.empty:
+                            st.markdown("#### INSIDER PURCHASES (Last 6 Months)")
+
+                            # Calculate net insider activity
+                            total_buys = insider_purchases[insider_purchases['Shares'] > 0]['Shares'].sum() if 'Shares' in insider_purchases.columns else 0
+                            total_sells = abs(insider_purchases[insider_purchases['Shares'] < 0]['Shares'].sum()) if 'Shares' in insider_purchases.columns else 0
+
+                            if total_buys > total_sells:
+                                insider_signal = "Net Buying"
+                                insider_color = "#10b981"
+                            elif total_sells > total_buys:
+                                insider_signal = "Net Selling"
+                                insider_color = "#ef4444"
+                            else:
+                                insider_signal = "Neutral"
+                                insider_color = "#f59e0b"
+
+                            st.markdown(f"""
+                            <div style="background: #1a1f2e; padding: 15px; border-radius: 8px; border-left: 3px solid {insider_color}; margin-bottom: 15px;">
+                                <p style="margin: 0; color: #6b7280; font-size: 12px;">INSIDER SENTIMENT</p>
+                                <h3 style="margin: 5px 0; color: {insider_color};">{insider_signal}</h3>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                            st.dataframe(insider_purchases.head(10), use_container_width=True)
+
+                        if insider_transactions is not None and not insider_transactions.empty:
+                            st.markdown("#### RECENT TRANSACTIONS")
+                            st.dataframe(insider_transactions.head(10), use_container_width=True)
+
+                        if (insider_purchases is None or insider_purchases.empty) and (insider_transactions is None or insider_transactions.empty):
+                            st.info("No insider trading data available for this symbol.")
+
+                    except Exception as e:
+                        st.info("Insider trading data not available.")
+                else:
+                    st.info("Insider trading data is only available for stocks.")
+
+            with tab6:
+                # Options Data
+                if market == "Stocks":
+                    try:
+                        ticker = yf.Ticker(symbol)
+                        options_dates = ticker.options
+
+                        if options_dates:
+                            st.markdown("#### OPTIONS OVERVIEW")
+
+                            # Get nearest expiration
+                            nearest_exp = options_dates[0]
+                            opt_chain = ticker.option_chain(nearest_exp)
+
+                            calls = opt_chain.calls
+                            puts = opt_chain.puts
+
+                            # Put/Call Ratio
+                            total_call_vol = calls['volume'].sum() if 'volume' in calls.columns else 0
+                            total_put_vol = puts['volume'].sum() if 'volume' in puts.columns else 0
+                            pc_ratio = total_put_vol / total_call_vol if total_call_vol > 0 else 0
+
+                            if pc_ratio < 0.7:
+                                pc_sentiment = "Bullish"
+                                pc_color = "#10b981"
+                            elif pc_ratio > 1.0:
+                                pc_sentiment = "Bearish"
+                                pc_color = "#ef4444"
+                            else:
+                                pc_sentiment = "Neutral"
+                                pc_color = "#f59e0b"
+
+                            col_opt1, col_opt2, col_opt3 = st.columns(3)
+                            with col_opt1:
+                                st.markdown(f"""
+                                <div style="background: #1a1f2e; padding: 15px; border-radius: 8px; text-align: center;">
+                                    <p style="margin: 0; color: #6b7280; font-size: 11px;">PUT/CALL RATIO</p>
+                                    <h3 style="margin: 5px 0; color: {pc_color};">{pc_ratio:.2f}</h3>
+                                    <p style="margin: 0; color: {pc_color}; font-size: 12px;">{pc_sentiment}</p>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            with col_opt2:
+                                avg_iv_calls = calls['impliedVolatility'].mean() * 100 if 'impliedVolatility' in calls.columns else 0
+                                st.markdown(f"""
+                                <div style="background: #1a1f2e; padding: 15px; border-radius: 8px; text-align: center;">
+                                    <p style="margin: 0; color: #6b7280; font-size: 11px;">AVG IV (CALLS)</p>
+                                    <h3 style="margin: 5px 0; color: #fff;">{avg_iv_calls:.1f}%</h3>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            with col_opt3:
+                                total_oi = calls['openInterest'].sum() + puts['openInterest'].sum() if 'openInterest' in calls.columns else 0
+                                st.markdown(f"""
+                                <div style="background: #1a1f2e; padding: 15px; border-radius: 8px; text-align: center;">
+                                    <p style="margin: 0; color: #6b7280; font-size: 11px;">OPEN INTEREST</p>
+                                    <h3 style="margin: 5px 0; color: #fff;">{total_oi:,.0f}</h3>
+                                </div>
+                                """, unsafe_allow_html=True)
+
+                            st.markdown("---")
+                            st.markdown(f"**Expiration: {nearest_exp}**")
+
+                            opt_tabs = st.tabs(["CALLS", "PUTS"])
+                            with opt_tabs[0]:
+                                display_cols = ['strike', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest', 'impliedVolatility']
+                                display_cols = [c for c in display_cols if c in calls.columns]
+                                st.dataframe(calls[display_cols].head(15), use_container_width=True)
+                            with opt_tabs[1]:
+                                display_cols = ['strike', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest', 'impliedVolatility']
+                                display_cols = [c for c in display_cols if c in puts.columns]
+                                st.dataframe(puts[display_cols].head(15), use_container_width=True)
+                        else:
+                            st.info("No options data available for this symbol.")
+                    except Exception as e:
+                        st.info("Options data not available.")
+                else:
+                    st.info("Options data is only available for stocks.")
+
             # Company info
             if stock_info and market == "Stocks":
                 st.markdown("---")
@@ -1418,161 +1579,232 @@ if mode == "Analysis":
 elif mode == "Scanner":
     st.markdown("### SECTOR SCANNER")
 
-    if market == "Stocks":
-        industry = st.selectbox("Select Sector", list(INDUSTRIES.keys()))
-        stocks = INDUSTRIES[industry]
-    elif market == "Crypto":
-        industry = "Crypto"
-        stocks = CRYPTO_SYMBOLS
-    else:
-        industry = "Forex"
-        stocks = FOREX_PAIRS
+    scanner_tabs = st.tabs(["Simple Scan", "Advanced Filters"])
 
-    st.caption(f"Scanning {len(stocks)} symbols...")
+    with scanner_tabs[0]:
+        if market == "Stocks":
+            industry = st.selectbox("Select Sector", list(INDUSTRIES.keys()))
+            stocks = INDUSTRIES[industry]
+        elif market == "Crypto":
+            industry = "Crypto"
+            stocks = CRYPTO_SYMBOLS
+        else:
+            industry = "Forex"
+            stocks = FOREX_PAIRS
 
-    if st.button("START SCAN", type="primary"):
-        progress = st.progress(0)
-        results = scan_industry(stocks, lambda p: progress.progress(p))
-        progress.empty()
+        st.caption(f"Scanning {len(stocks)} symbols...")
 
-        if results:
-            df = pd.DataFrame(results)
-            st.session_state['scan_results'] = results
+        if st.button("START SCAN", type="primary"):
+            progress = st.progress(0)
+            results = scan_industry(stocks, lambda p: progress.progress(p))
+            progress.empty()
 
-            buy_df = df[df['Signal'] == 'BUY'].sort_values('Score', ascending=False)
-            sell_df = df[df['Signal'] == 'SELL'].sort_values('Score', ascending=False)
-            neutral_df = df[df['Signal'] == 'NEUTRAL'].sort_values('Score', ascending=False)
+            if results:
+                df = pd.DataFrame(results)
+                st.session_state['scan_results'] = results
 
-            # Summary
-            col_sum1, col_sum2, col_sum3 = st.columns(3)
-            with col_sum1:
-                st.metric("BUY Signals", len(buy_df), delta=None)
-            with col_sum2:
-                st.metric("SELL Signals", len(sell_df), delta=None)
-            with col_sum3:
-                st.metric("NEUTRAL", len(neutral_df), delta=None)
+                buy_df = df[df['Signal'] == 'BUY'].sort_values('Score', ascending=False)
+                sell_df = df[df['Signal'] == 'SELL'].sort_values('Score', ascending=False)
+                neutral_df = df[df['Signal'] == 'NEUTRAL'].sort_values('Score', ascending=False)
 
-            st.markdown("---")
+                # Summary
+                col_sum1, col_sum2, col_sum3 = st.columns(3)
+                with col_sum1:
+                    st.metric("BUY Signals", len(buy_df), delta=None)
+                with col_sum2:
+                    st.metric("SELL Signals", len(sell_df), delta=None)
+                with col_sum3:
+                    st.metric("NEUTRAL", len(neutral_df), delta=None)
 
-            # Tabs for signals
-            tab_buy, tab_sell, tab_all = st.tabs(["BUY SIGNALS", "SELL SIGNALS", "ALL RESULTS"])
+                st.markdown("---")
 
-            with tab_buy:
-                if not buy_df.empty:
-                    for _, row in buy_df.iterrows():
-                        with st.expander(f"**{row['Symbol']}** - ${row['Price']:.2f} ({row['Change']:+.1f}%) - Score: {row['Score']:.0f}%"):
-                            # Fetch company info and detailed data
-                            stock_info = get_stock_info(row['Symbol'])
-                            company_name = stock_info.get('name', row['Symbol']) if stock_info else row['Symbol']
-                            sector = stock_info.get('sector', '') if stock_info else ''
+                # Tabs for signals
+                tab_buy, tab_sell, tab_all = st.tabs(["BUY SIGNALS", "SELL SIGNALS", "ALL RESULTS"])
 
-                            st.markdown(f"""
-                            <div style="margin-bottom: 15px;">
-                                <p style="margin: 0; font-size: 12px; color: #6b7280;">{row['Symbol']} {('| ' + sector) if sector else ''}</p>
-                                <h3 style="margin: 5px 0; color: #fff;">{company_name}</h3>
-                            </div>
-                            """, unsafe_allow_html=True)
+                with tab_buy:
+                    if not buy_df.empty:
+                        for _, row in buy_df.iterrows():
+                            with st.expander(f"**{row['Symbol']}** - ${row['Price']:.2f} ({row['Change']:+.1f}%) - Score: {row['Score']:.0f}%"):
+                                stock_info = get_stock_info(row['Symbol'])
+                                company_name = stock_info.get('name', row['Symbol']) if stock_info else row['Symbol']
+                                st.markdown(f"**{company_name}**")
+                                detail_data = fetch_stock_data(row['Symbol'], period="3mo")
+                                if detail_data is not None and len(detail_data) >= 20:
+                                    detail_data = calculate_indicators(detail_data)
+                                    latest = detail_data.iloc[-1]
+                                    col_d1, col_d2, col_d3, col_d4 = st.columns(4)
+                                    with col_d1:
+                                        st.metric("RSI", f"{latest.get('rsi', 0):.1f}")
+                                    with col_d2:
+                                        st.metric("MACD", "Bullish" if latest.get('macd_hist', 0) > 0 else "Bearish")
+                                    with col_d3:
+                                        st.metric("Volume", f"{latest.get('volume', 0)/1e6:.1f}M")
+                                    with col_d4:
+                                        st.metric("ATR %", f"{latest.get('atr_pct', 0):.2f}%")
+                    else:
+                        st.info("No BUY signals found")
 
-                            detail_data = fetch_stock_data(row['Symbol'], period="3mo")
-                            if detail_data is not None and len(detail_data) >= 20:
-                                detail_data = calculate_indicators(detail_data)
-                                latest = detail_data.iloc[-1]
+                with tab_sell:
+                    if not sell_df.empty:
+                        for _, row in sell_df.iterrows():
+                            with st.expander(f"**{row['Symbol']}** - ${row['Price']:.2f} ({row['Change']:+.1f}%) - Score: {row['Score']:.0f}%"):
+                                stock_info = get_stock_info(row['Symbol'])
+                                company_name = stock_info.get('name', row['Symbol']) if stock_info else row['Symbol']
+                                st.markdown(f"**{company_name}**")
+                                detail_data = fetch_stock_data(row['Symbol'], period="3mo")
+                                if detail_data is not None and len(detail_data) >= 20:
+                                    detail_data = calculate_indicators(detail_data)
+                                    latest = detail_data.iloc[-1]
+                                    col_d1, col_d2, col_d3, col_d4 = st.columns(4)
+                                    with col_d1:
+                                        st.metric("RSI", f"{latest.get('rsi', 0):.1f}")
+                                    with col_d2:
+                                        st.metric("MACD", "Bullish" if latest.get('macd_hist', 0) > 0 else "Bearish")
+                                    with col_d3:
+                                        st.metric("Volume", f"{latest.get('volume', 0)/1e6:.1f}M")
+                                    with col_d4:
+                                        st.metric("ATR %", f"{latest.get('atr_pct', 0):.2f}%")
+                    else:
+                        st.info("No SELL signals found")
 
-                                col_d1, col_d2, col_d3, col_d4 = st.columns(4)
-                                with col_d1:
-                                    st.metric("RSI", f"{latest.get('rsi', 0):.1f}")
-                                with col_d2:
-                                    st.metric("MACD", "Bullish" if latest.get('macd_hist', 0) > 0 else "Bearish")
-                                with col_d3:
-                                    st.metric("Volume", f"{latest.get('volume', 0)/1e6:.1f}M")
-                                with col_d4:
-                                    st.metric("ATR %", f"{latest.get('atr_pct', 0):.2f}%")
+                with tab_all:
+                    st.dataframe(
+                        df.style.format({'Price': '${:.2f}', 'Change': '{:+.2f}%', 'RSI': '{:.1f}', 'Score': '{:.0f}%'}),
+                        use_container_width=True
+                    )
 
-                                # Mini chart
-                                fig_mini = go.Figure()
-                                fig_mini.add_trace(go.Candlestick(
-                                    x=detail_data.index[-30:],
-                                    open=detail_data['open'][-30:],
-                                    high=detail_data['high'][-30:],
-                                    low=detail_data['low'][-30:],
-                                    close=detail_data['close'][-30:],
-                                    increasing_line_color='#10b981',
-                                    decreasing_line_color='#ef4444'
-                                ))
-                                fig_mini.update_layout(
-                                    height=250,
-                                    template='plotly_dark',
-                                    paper_bgcolor='#151922',
-                                    plot_bgcolor='#151922',
-                                    xaxis_rangeslider_visible=False,
-                                    margin=dict(l=0, r=0, t=10, b=0),
-                                    showlegend=False
-                                )
-                                st.plotly_chart(fig_mini, use_container_width=True)
+    with scanner_tabs[1]:
+        st.markdown("#### ADVANCED FILTERS")
+        st.markdown("Build custom filters to find specific opportunities.")
+
+        # Filter presets
+        st.markdown("**Quick Presets:**")
+        col_preset1, col_preset2, col_preset3, col_preset4 = st.columns(4)
+        with col_preset1:
+            preset_oversold = st.button("Oversold (RSI<30)")
+        with col_preset2:
+            preset_overbought = st.button("Overbought (RSI>70)")
+        with col_preset3:
+            preset_bullish = st.button("Bullish MACD")
+        with col_preset4:
+            preset_volume = st.button("High Volume")
+
+        st.markdown("---")
+        st.markdown("**Custom Filters:**")
+
+        col_f1, col_f2, col_f3 = st.columns(3)
+        with col_f1:
+            filter_rsi = st.checkbox("RSI Filter")
+            if filter_rsi:
+                rsi_op = st.selectbox("RSI", ["<", ">"], key="rsi_op")
+                rsi_val = st.number_input("Value", value=30, key="rsi_val")
+        with col_f2:
+            filter_macd = st.checkbox("MACD Filter")
+            if filter_macd:
+                macd_op = st.selectbox("MACD Histogram", ["Positive", "Negative"], key="macd_op")
+        with col_f3:
+            filter_price = st.checkbox("Price vs SMA")
+            if filter_price:
+                price_sma = st.selectbox("Price is", ["Above SMA 20", "Below SMA 20", "Above SMA 50", "Below SMA 50"], key="price_sma")
+
+        # Scan with filters
+        if market == "Stocks":
+            adv_industry = st.selectbox("Scan Sector", ["All"] + list(INDUSTRIES.keys()), key="adv_industry")
+            if adv_industry == "All":
+                adv_stocks = ALL_STOCKS[:100]  # Limit for performance
+            else:
+                adv_stocks = INDUSTRIES[adv_industry]
+        elif market == "Crypto":
+            adv_stocks = CRYPTO_SYMBOLS
+        else:
+            adv_stocks = FOREX_PAIRS
+
+        run_adv_scan = st.button("RUN ADVANCED SCAN", type="primary", key="adv_scan_btn")
+
+        # Apply presets
+        if preset_oversold:
+            filter_rsi = True
+            rsi_op = "<"
+            rsi_val = 30
+            run_adv_scan = True
+        elif preset_overbought:
+            filter_rsi = True
+            rsi_op = ">"
+            rsi_val = 70
+            run_adv_scan = True
+        elif preset_bullish:
+            filter_macd = True
+            macd_op = "Positive"
+            run_adv_scan = True
+        elif preset_volume:
+            run_adv_scan = True
+
+        if run_adv_scan:
+            with st.spinner("Scanning with filters..."):
+                adv_results = []
+                progress = st.progress(0)
+
+                for idx, sym in enumerate(adv_stocks):
+                    progress.progress((idx + 1) / len(adv_stocks))
+                    try:
+                        data = fetch_stock_data(sym, period="3mo")
+                        if data is None or len(data) < 20:
+                            continue
+                        data = calculate_indicators(data)
+                        latest = data.iloc[-1]
+
+                        # Apply filters
+                        passes = True
+
+                        if filter_rsi:
+                            rsi_val_check = locals().get('rsi_val', 30)
+                            rsi_op_check = locals().get('rsi_op', '<')
+                            if rsi_op_check == "<" and latest.get('rsi', 50) >= rsi_val_check:
+                                passes = False
+                            elif rsi_op_check == ">" and latest.get('rsi', 50) <= rsi_val_check:
+                                passes = False
+
+                        if filter_macd:
+                            macd_op_check = locals().get('macd_op', 'Positive')
+                            if macd_op_check == "Positive" and latest.get('macd_hist', 0) <= 0:
+                                passes = False
+                            elif macd_op_check == "Negative" and latest.get('macd_hist', 0) >= 0:
+                                passes = False
+
+                        if filter_price:
+                            price_sma_check = locals().get('price_sma', 'Above SMA 20')
+                            if "Above SMA 20" in price_sma_check and latest['close'] <= latest.get('sma_20', 0):
+                                passes = False
+                            elif "Below SMA 20" in price_sma_check and latest['close'] >= latest.get('sma_20', float('inf')):
+                                passes = False
+                            elif "Above SMA 50" in price_sma_check and latest['close'] <= latest.get('sma_50', 0):
+                                passes = False
+                            elif "Below SMA 50" in price_sma_check and latest['close'] >= latest.get('sma_50', float('inf')):
+                                passes = False
+
+                        if passes:
+                            conf = calculate_confluence(data, None, 0, None, None)
+                            adv_results.append({
+                                'Symbol': sym,
+                                'Price': latest['close'],
+                                'RSI': latest.get('rsi', 0),
+                                'MACD': 'Bullish' if latest.get('macd_hist', 0) > 0 else 'Bearish',
+                                'Signal': conf['signal'],
+                                'Score': conf['score']
+                            })
+                    except:
+                        continue
+
+                progress.empty()
+
+                if adv_results:
+                    st.success(f"Found {len(adv_results)} matches!")
+                    adv_df = pd.DataFrame(adv_results)
+                    st.dataframe(adv_df, use_container_width=True)
                 else:
-                    st.info("No BUY signals found")
+                    st.info("No symbols match your filters.")
 
-            with tab_sell:
-                if not sell_df.empty:
-                    for _, row in sell_df.iterrows():
-                        with st.expander(f"**{row['Symbol']}** - ${row['Price']:.2f} ({row['Change']:+.1f}%) - Score: {row['Score']:.0f}%"):
-                            # Fetch company info
-                            stock_info = get_stock_info(row['Symbol'])
-                            company_name = stock_info.get('name', row['Symbol']) if stock_info else row['Symbol']
-                            sector = stock_info.get('sector', '') if stock_info else ''
-
-                            st.markdown(f"""
-                            <div style="margin-bottom: 15px;">
-                                <p style="margin: 0; font-size: 12px; color: #6b7280;">{row['Symbol']} {('| ' + sector) if sector else ''}</p>
-                                <h3 style="margin: 5px 0; color: #fff;">{company_name}</h3>
-                            </div>
-                            """, unsafe_allow_html=True)
-
-                            detail_data = fetch_stock_data(row['Symbol'], period="3mo")
-                            if detail_data is not None and len(detail_data) >= 20:
-                                detail_data = calculate_indicators(detail_data)
-                                latest = detail_data.iloc[-1]
-
-                                col_d1, col_d2, col_d3, col_d4 = st.columns(4)
-                                with col_d1:
-                                    st.metric("RSI", f"{latest.get('rsi', 0):.1f}")
-                                with col_d2:
-                                    st.metric("MACD", "Bullish" if latest.get('macd_hist', 0) > 0 else "Bearish")
-                                with col_d3:
-                                    st.metric("Volume", f"{latest.get('volume', 0)/1e6:.1f}M")
-                                with col_d4:
-                                    st.metric("ATR %", f"{latest.get('atr_pct', 0):.2f}%")
-
-                                fig_mini = go.Figure()
-                                fig_mini.add_trace(go.Candlestick(
-                                    x=detail_data.index[-30:],
-                                    open=detail_data['open'][-30:],
-                                    high=detail_data['high'][-30:],
-                                    low=detail_data['low'][-30:],
-                                    close=detail_data['close'][-30:],
-                                    increasing_line_color='#10b981',
-                                    decreasing_line_color='#ef4444'
-                                ))
-                                fig_mini.update_layout(
-                                    height=250,
-                                    template='plotly_dark',
-                                    paper_bgcolor='#151922',
-                                    plot_bgcolor='#151922',
-                                    xaxis_rangeslider_visible=False,
-                                    margin=dict(l=0, r=0, t=10, b=0),
-                                    showlegend=False
-                                )
-                                st.plotly_chart(fig_mini, use_container_width=True)
-                else:
-                    st.info("No SELL signals found")
-
-            with tab_all:
-                st.dataframe(
-                    df.style.format({'Price': '${:.2f}', 'Change': '{:+.2f}%', 'RSI': '{:.1f}', 'Score': '{:.0f}%'}),
-                    use_container_width=True
-                )
-
-else:  # Market Overview
+elif mode == "Market Overview":
     st.markdown("### MARKET OVERVIEW")
 
     if market == "Stocks":
@@ -1757,6 +1989,737 @@ else:  # Market Overview
                         st.info("No data available for this sector")
                 else:
                     st.info("Scan required to view details")
+
+# ===== PORTFOLIO PAGE =====
+elif mode == "Portfolio":
+    st.markdown("### PORTFOLIO")
+
+    portfolio_tab = st.tabs(["Watchlist", "Holdings", "Performance"])
+
+    with portfolio_tab[0]:
+        st.markdown("#### MY WATCHLIST")
+
+        # Add to watchlist
+        col_add1, col_add2, col_add3 = st.columns([3, 2, 1])
+        with col_add1:
+            new_symbol = st.text_input("Add symbol", placeholder="e.g. AAPL", label_visibility="collapsed")
+        with col_add2:
+            add_market = st.selectbox("Market", ["Stocks", "Crypto", "Forex"], key="watchlist_market", label_visibility="collapsed")
+        with col_add3:
+            if st.button("Add", type="primary"):
+                if new_symbol:
+                    symbol_upper = new_symbol.upper().strip()
+                    if add_market == "Crypto" and not symbol_upper.endswith("-USD"):
+                        symbol_upper = f"{symbol_upper}-USD"
+                    if db.add_to_watchlist(symbol_upper, add_market):
+                        st.success(f"Added {symbol_upper}")
+                        st.rerun()
+
+        # Display watchlist
+        watchlist = db.get_watchlist()
+        if watchlist:
+            for item in watchlist:
+                try:
+                    ticker = yf.Ticker(item['symbol'])
+                    hist = ticker.history(period="2d")
+                    if len(hist) >= 2:
+                        price = hist['Close'].iloc[-1]
+                        prev = hist['Close'].iloc[-2]
+                        change = ((price / prev) - 1) * 100
+                    else:
+                        price = hist['Close'].iloc[-1] if len(hist) > 0 else 0
+                        change = 0
+
+                    # Get signal
+                    data = fetch_stock_data(item['symbol'], period="3mo")
+                    signal = "N/A"
+                    score = 0
+                    if data is not None and len(data) >= 20:
+                        data = calculate_indicators(data)
+                        conf = calculate_confluence(data, None, 0, None, None)
+                        signal = conf['signal']
+                        score = conf['score']
+
+                    signal_color = "#10b981" if signal == "BUY" else "#ef4444" if signal == "SELL" else "#f59e0b"
+
+                    col_w1, col_w2, col_w3, col_w4, col_w5 = st.columns([2, 2, 2, 2, 1])
+                    with col_w1:
+                        st.markdown(f"**{item['symbol']}**")
+                    with col_w2:
+                        st.markdown(f"${price:,.2f}")
+                    with col_w3:
+                        delta_color = "#10b981" if change >= 0 else "#ef4444"
+                        st.markdown(f"<span style='color: {delta_color}'>{change:+.2f}%</span>", unsafe_allow_html=True)
+                    with col_w4:
+                        st.markdown(f"<span style='color: {signal_color}'>{signal} {score:.0f}%</span>", unsafe_allow_html=True)
+                    with col_w5:
+                        if st.button("X", key=f"rm_{item['id']}"):
+                            db.remove_from_watchlist(item['symbol'], item['market'])
+                            st.rerun()
+                except Exception as e:
+                    col_w1, col_w2 = st.columns([4, 1])
+                    with col_w1:
+                        st.markdown(f"**{item['symbol']}** - Error loading data")
+                    with col_w2:
+                        if st.button("X", key=f"rm_{item['id']}"):
+                            db.remove_from_watchlist(item['symbol'], item['market'])
+                            st.rerun()
+        else:
+            st.info("Your watchlist is empty. Add symbols above to get started.")
+
+    with portfolio_tab[1]:
+        st.markdown("#### MY HOLDINGS")
+
+        # Add holding
+        st.markdown("**Add Position**")
+        col_h1, col_h2, col_h3, col_h4, col_h5 = st.columns([2, 1.5, 1.5, 1.5, 1])
+        with col_h1:
+            hold_symbol = st.text_input("Symbol", placeholder="AAPL", key="hold_sym", label_visibility="collapsed")
+        with col_h2:
+            hold_qty = st.number_input("Shares", min_value=0.0, step=1.0, key="hold_qty", label_visibility="collapsed")
+        with col_h3:
+            hold_price = st.number_input("Avg Price", min_value=0.0, step=0.01, key="hold_price", label_visibility="collapsed")
+        with col_h4:
+            hold_market = st.selectbox("Market", ["Stocks", "Crypto", "Forex"], key="hold_market", label_visibility="collapsed")
+        with col_h5:
+            if st.button("Add", key="add_holding", type="primary"):
+                if hold_symbol and hold_qty > 0 and hold_price > 0:
+                    symbol_upper = hold_symbol.upper().strip()
+                    if hold_market == "Crypto" and not symbol_upper.endswith("-USD"):
+                        symbol_upper = f"{symbol_upper}-USD"
+                    db.add_holding(symbol_upper, hold_market, hold_qty, hold_price)
+                    st.success(f"Added {hold_qty} {symbol_upper}")
+                    st.rerun()
+
+        st.markdown("---")
+
+        # Holdings summary
+        holdings = db.get_holdings()
+        if holdings:
+            total_value = 0
+            total_cost = 0
+            holdings_data = []
+
+            for h in holdings:
+                try:
+                    ticker = yf.Ticker(h['symbol'])
+                    current_price = ticker.history(period="1d")['Close'].iloc[-1]
+                    value = current_price * h['quantity']
+                    cost = h['avg_price'] * h['quantity']
+                    pnl = value - cost
+                    pnl_pct = (pnl / cost) * 100 if cost > 0 else 0
+
+                    total_value += value
+                    total_cost += cost
+
+                    holdings_data.append({
+                        'id': h['id'],
+                        'symbol': h['symbol'],
+                        'quantity': h['quantity'],
+                        'avg_price': h['avg_price'],
+                        'current_price': current_price,
+                        'value': value,
+                        'pnl': pnl,
+                        'pnl_pct': pnl_pct
+                    })
+                except:
+                    holdings_data.append({
+                        'id': h['id'],
+                        'symbol': h['symbol'],
+                        'quantity': h['quantity'],
+                        'avg_price': h['avg_price'],
+                        'current_price': 0,
+                        'value': 0,
+                        'pnl': 0,
+                        'pnl_pct': 0
+                    })
+
+            total_pnl = total_value - total_cost
+            total_pnl_pct = (total_pnl / total_cost) * 100 if total_cost > 0 else 0
+
+            # Summary cards
+            col_s1, col_s2, col_s3 = st.columns(3)
+            with col_s1:
+                st.markdown(f"""
+                <div style="background: #1a1f2e; padding: 20px; border-radius: 8px; text-align: center;">
+                    <p style="margin: 0; color: #6b7280; font-size: 12px;">TOTAL VALUE</p>
+                    <h2 style="margin: 5px 0; color: #fff;">${total_value:,.2f}</h2>
+                </div>
+                """, unsafe_allow_html=True)
+            with col_s2:
+                pnl_color = "#10b981" if total_pnl >= 0 else "#ef4444"
+                st.markdown(f"""
+                <div style="background: #1a1f2e; padding: 20px; border-radius: 8px; text-align: center;">
+                    <p style="margin: 0; color: #6b7280; font-size: 12px;">TOTAL P&L</p>
+                    <h2 style="margin: 5px 0; color: {pnl_color};">${total_pnl:+,.2f}</h2>
+                </div>
+                """, unsafe_allow_html=True)
+            with col_s3:
+                st.markdown(f"""
+                <div style="background: #1a1f2e; padding: 20px; border-radius: 8px; text-align: center;">
+                    <p style="margin: 0; color: #6b7280; font-size: 12px;">RETURN</p>
+                    <h2 style="margin: 5px 0; color: {pnl_color};">{total_pnl_pct:+.2f}%</h2>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("---")
+
+            # Holdings table
+            for h in holdings_data:
+                pnl_color = "#10b981" if h['pnl'] >= 0 else "#ef4444"
+                col_t1, col_t2, col_t3, col_t4, col_t5, col_t6 = st.columns([2, 1.5, 1.5, 1.5, 2, 1])
+                with col_t1:
+                    st.markdown(f"**{h['symbol']}**")
+                with col_t2:
+                    st.markdown(f"{h['quantity']:.2f}")
+                with col_t3:
+                    st.markdown(f"${h['avg_price']:.2f}")
+                with col_t4:
+                    st.markdown(f"${h['current_price']:.2f}")
+                with col_t5:
+                    st.markdown(f"<span style='color: {pnl_color}'>${h['pnl']:+,.2f} ({h['pnl_pct']:+.2f}%)</span>", unsafe_allow_html=True)
+                with col_t6:
+                    if st.button("Sell", key=f"sell_{h['id']}"):
+                        db.remove_holding(h['id'])
+                        st.rerun()
+        else:
+            st.info("No holdings yet. Add your first position above.")
+
+    with portfolio_tab[2]:
+        st.markdown("#### PERFORMANCE")
+        holdings = db.get_holdings()
+        if holdings:
+            # Pie chart of holdings
+            labels = [h['symbol'] for h in holdings]
+            values = []
+            for h in holdings:
+                try:
+                    ticker = yf.Ticker(h['symbol'])
+                    price = ticker.history(period="1d")['Close'].iloc[-1]
+                    values.append(price * h['quantity'])
+                except:
+                    values.append(h['avg_price'] * h['quantity'])
+
+            fig_pie = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4)])
+            fig_pie.update_layout(
+                template='plotly_dark',
+                paper_bgcolor='#0e1117',
+                plot_bgcolor='#0e1117',
+                height=400
+            )
+            st.plotly_chart(fig_pie, use_container_width=True)
+        else:
+            st.info("Add holdings to see performance charts.")
+
+# ===== TOOLS PAGE =====
+elif mode == "Tools":
+    st.markdown("### TOOLS")
+
+    tools_tab = st.tabs(["Backtest", "Correlation", "Export"])
+
+    with tools_tab[0]:
+        st.markdown("#### BACKTESTING")
+
+        col_bt1, col_bt2, col_bt3, col_bt4 = st.columns([2, 2, 2, 1])
+        with col_bt1:
+            bt_symbol = st.text_input("Symbol", value="AAPL", key="bt_symbol")
+        with col_bt2:
+            bt_strategy = st.selectbox("Strategy", ["SMA Crossover", "RSI Strategy", "MACD Strategy", "Bollinger Bands"])
+        with col_bt3:
+            bt_period = st.selectbox("Period", ["6mo", "1y", "2y", "5y"])
+        with col_bt4:
+            bt_capital = st.number_input("Capital", value=10000, step=1000)
+
+        if st.button("RUN BACKTEST", type="primary"):
+            with st.spinner("Running backtest..."):
+                symbol = bt_symbol.upper().strip()
+                data = fetch_stock_data(symbol, period=bt_period)
+
+                if data is not None and len(data) >= 50:
+                    data = calculate_indicators(data)
+
+                    # Simple backtest logic
+                    trades = []
+                    position = None
+                    equity = [bt_capital]
+
+                    for i in range(50, len(data)):
+                        row = data.iloc[i]
+                        prev_row = data.iloc[i-1]
+
+                        # Strategy signals
+                        buy_signal = False
+                        sell_signal = False
+
+                        if bt_strategy == "SMA Crossover":
+                            buy_signal = row['sma_20'] > row['sma_50'] and prev_row['sma_20'] <= prev_row['sma_50']
+                            sell_signal = row['sma_20'] < row['sma_50'] and prev_row['sma_20'] >= prev_row['sma_50']
+                        elif bt_strategy == "RSI Strategy":
+                            buy_signal = row['rsi'] < 30 and prev_row['rsi'] >= 30
+                            sell_signal = row['rsi'] > 70 and prev_row['rsi'] <= 70
+                        elif bt_strategy == "MACD Strategy":
+                            buy_signal = row['macd_hist'] > 0 and prev_row['macd_hist'] <= 0
+                            sell_signal = row['macd_hist'] < 0 and prev_row['macd_hist'] >= 0
+                        elif bt_strategy == "Bollinger Bands":
+                            buy_signal = row['close'] < row['bb_lower'] and prev_row['close'] >= prev_row['bb_lower']
+                            sell_signal = row['close'] > row['bb_upper'] and prev_row['close'] <= prev_row['bb_upper']
+
+                        # Execute trades
+                        if buy_signal and position is None:
+                            position = {'entry': row['close'], 'date': data.index[i], 'shares': equity[-1] / row['close']}
+                        elif sell_signal and position is not None:
+                            pnl = (row['close'] - position['entry']) * position['shares']
+                            trades.append({
+                                'entry_date': position['date'].strftime('%Y-%m-%d'),
+                                'exit_date': data.index[i].strftime('%Y-%m-%d'),
+                                'entry': position['entry'],
+                                'exit': row['close'],
+                                'pnl': pnl,
+                                'pnl_pct': ((row['close'] / position['entry']) - 1) * 100
+                            })
+                            equity.append(equity[-1] + pnl)
+                            position = None
+                        else:
+                            equity.append(equity[-1])
+
+                    # Calculate metrics
+                    total_return = ((equity[-1] / bt_capital) - 1) * 100
+                    winning_trades = len([t for t in trades if t['pnl'] > 0])
+                    win_rate = (winning_trades / len(trades)) * 100 if trades else 0
+
+                    returns = pd.Series(equity).pct_change().dropna()
+                    sharpe = (returns.mean() / returns.std()) * np.sqrt(252) if returns.std() > 0 else 0
+
+                    max_dd = 0
+                    peak = equity[0]
+                    for e in equity:
+                        if e > peak:
+                            peak = e
+                        dd = (peak - e) / peak * 100
+                        if dd > max_dd:
+                            max_dd = dd
+
+                    # Save to database
+                    db.save_backtest(symbol, bt_strategy, bt_period, total_return, win_rate,
+                                     sharpe, max_dd, json.dumps(trades), json.dumps(equity))
+
+                    # Display results
+                    col_r1, col_r2, col_r3, col_r4 = st.columns(4)
+                    with col_r1:
+                        ret_color = "#10b981" if total_return >= 0 else "#ef4444"
+                        st.markdown(f"""
+                        <div style="background: #1a1f2e; padding: 15px; border-radius: 8px; text-align: center;">
+                            <p style="margin: 0; color: #6b7280; font-size: 11px;">TOTAL RETURN</p>
+                            <h3 style="margin: 5px 0; color: {ret_color};">{total_return:+.2f}%</h3>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with col_r2:
+                        st.markdown(f"""
+                        <div style="background: #1a1f2e; padding: 15px; border-radius: 8px; text-align: center;">
+                            <p style="margin: 0; color: #6b7280; font-size: 11px;">WIN RATE</p>
+                            <h3 style="margin: 5px 0; color: #fff;">{win_rate:.1f}%</h3>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with col_r3:
+                        st.markdown(f"""
+                        <div style="background: #1a1f2e; padding: 15px; border-radius: 8px; text-align: center;">
+                            <p style="margin: 0; color: #6b7280; font-size: 11px;">SHARPE RATIO</p>
+                            <h3 style="margin: 5px 0; color: #fff;">{sharpe:.2f}</h3>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with col_r4:
+                        st.markdown(f"""
+                        <div style="background: #1a1f2e; padding: 15px; border-radius: 8px; text-align: center;">
+                            <p style="margin: 0; color: #6b7280; font-size: 11px;">MAX DRAWDOWN</p>
+                            <h3 style="margin: 5px 0; color: #ef4444;">-{max_dd:.2f}%</h3>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    # Equity curve
+                    st.markdown("---")
+                    fig_eq = go.Figure()
+                    fig_eq.add_trace(go.Scatter(y=equity, mode='lines', name='Equity',
+                                                 line=dict(color='#3b82f6', width=2)))
+                    fig_eq.update_layout(
+                        title="Equity Curve",
+                        template='plotly_dark',
+                        paper_bgcolor='#0e1117',
+                        plot_bgcolor='#0e1117',
+                        height=300
+                    )
+                    st.plotly_chart(fig_eq, use_container_width=True)
+
+                    # Trades table
+                    if trades:
+                        st.markdown("#### TRADES")
+                        trades_df = pd.DataFrame(trades)
+                        st.dataframe(trades_df, use_container_width=True)
+                else:
+                    st.error("Could not fetch enough data for backtest")
+
+    with tools_tab[1]:
+        st.markdown("#### CORRELATION ANALYSIS")
+
+        # Symbol selection
+        st.markdown("**Select symbols to compare:**")
+        if 'corr_symbols' not in st.session_state:
+            st.session_state.corr_symbols = ['AAPL', 'MSFT', 'GOOGL']
+
+        col_cs1, col_cs2 = st.columns([4, 1])
+        with col_cs1:
+            corr_input = st.text_input("Add symbol", placeholder="e.g. NVDA", key="corr_add")
+        with col_cs2:
+            if st.button("Add", key="add_corr"):
+                if corr_input and corr_input.upper() not in st.session_state.corr_symbols:
+                    st.session_state.corr_symbols.append(corr_input.upper())
+                    st.rerun()
+
+        # Display selected symbols
+        st.markdown(" | ".join([f"**{s}**" for s in st.session_state.corr_symbols]))
+
+        corr_period = st.selectbox("Period", ["3mo", "6mo", "1y"], key="corr_period")
+
+        if st.button("CALCULATE CORRELATION", type="primary"):
+            with st.spinner("Calculating..."):
+                prices = {}
+                for sym in st.session_state.corr_symbols:
+                    data = fetch_stock_data(sym, period=corr_period)
+                    if data is not None:
+                        prices[sym] = data['close']
+
+                if len(prices) >= 2:
+                    df_prices = pd.DataFrame(prices)
+                    corr_matrix = df_prices.pct_change().corr()
+
+                    # Heatmap
+                    fig_corr = px.imshow(corr_matrix,
+                                         labels=dict(color="Correlation"),
+                                         x=corr_matrix.columns,
+                                         y=corr_matrix.columns,
+                                         color_continuous_scale='RdYlGn',
+                                         zmin=-1, zmax=1)
+                    fig_corr.update_layout(
+                        template='plotly_dark',
+                        paper_bgcolor='#0e1117',
+                        height=400
+                    )
+                    st.plotly_chart(fig_corr, use_container_width=True)
+
+                    # Interpretation
+                    st.markdown("#### INTERPRETATION")
+                    for i, sym1 in enumerate(corr_matrix.columns):
+                        for j, sym2 in enumerate(corr_matrix.columns):
+                            if i < j:
+                                corr_val = corr_matrix.iloc[i, j]
+                                if abs(corr_val) > 0.7:
+                                    level = "highly"
+                                elif abs(corr_val) > 0.4:
+                                    level = "moderately"
+                                else:
+                                    level = "weakly"
+                                direction = "positively" if corr_val > 0 else "negatively"
+                                st.markdown(f"- **{sym1}** and **{sym2}** are {level} {direction} correlated ({corr_val:.2f})")
+                else:
+                    st.error("Need at least 2 valid symbols")
+
+    with tools_tab[2]:
+        st.markdown("#### EXPORT ANALYSIS")
+
+        exp_symbol = st.text_input("Symbol to export", value="AAPL", key="exp_symbol")
+        col_exp1, col_exp2 = st.columns(2)
+
+        with col_exp1:
+            if st.button("Export to Excel", type="primary"):
+                symbol = exp_symbol.upper().strip()
+                data = fetch_stock_data(symbol, period="6mo")
+                if data is not None:
+                    data = calculate_indicators(data)
+
+                    # Create Excel buffer
+                    buffer = io.BytesIO()
+                    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                        data.to_excel(writer, sheet_name='Price Data')
+
+                        # Summary sheet
+                        latest = data.iloc[-1]
+                        summary = pd.DataFrame({
+                            'Metric': ['Symbol', 'Price', 'RSI', 'MACD', 'SMA 20', 'SMA 50'],
+                            'Value': [symbol, latest['close'], latest.get('rsi', 0),
+                                      latest.get('macd', 0), latest.get('sma_20', 0), latest.get('sma_50', 0)]
+                        })
+                        summary.to_excel(writer, sheet_name='Summary', index=False)
+
+                    buffer.seek(0)
+                    st.download_button(
+                        label="Download Excel",
+                        data=buffer,
+                        file_name=f"{symbol}_analysis_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                else:
+                    st.error("Could not fetch data")
+
+        with col_exp2:
+            if st.button("Export to CSV"):
+                symbol = exp_symbol.upper().strip()
+                data = fetch_stock_data(symbol, period="6mo")
+                if data is not None:
+                    data = calculate_indicators(data)
+                    csv = data.to_csv()
+                    st.download_button(
+                        label="Download CSV",
+                        data=csv,
+                        file_name=f"{symbol}_data_{datetime.now().strftime('%Y%m%d')}.csv",
+                        mime="text/csv"
+                    )
+                else:
+                    st.error("Could not fetch data")
+
+# ===== ALERTS PAGE =====
+elif mode == "Alerts":
+    st.markdown("### ALERTS")
+
+    alerts_tab = st.tabs(["Create Alert", "Active Alerts", "Settings"])
+
+    with alerts_tab[0]:
+        st.markdown("#### CREATE NEW ALERT")
+
+        col_a1, col_a2, col_a3, col_a4 = st.columns([2, 2, 2, 1.5])
+        with col_a1:
+            alert_symbol = st.text_input("Symbol", placeholder="AAPL", key="alert_sym")
+        with col_a2:
+            alert_type = st.selectbox("Alert Type", [
+                "Price Above", "Price Below",
+                "RSI Above 70", "RSI Below 30",
+                "Signal Changes to BUY", "Signal Changes to SELL"
+            ])
+        with col_a3:
+            if "Price" in alert_type:
+                alert_value = st.number_input("Price", min_value=0.0, step=0.01, key="alert_val")
+            else:
+                alert_value = 0
+                st.text_input("Value", value="Auto", disabled=True)
+        with col_a4:
+            alert_market = st.selectbox("Market", ["Stocks", "Crypto", "Forex"], key="alert_mkt")
+
+        if st.button("CREATE ALERT", type="primary"):
+            if alert_symbol:
+                symbol = alert_symbol.upper().strip()
+                if alert_market == "Crypto" and not symbol.endswith("-USD"):
+                    symbol = f"{symbol}-USD"
+
+                # Determine condition
+                if "Above" in alert_type:
+                    condition = "above"
+                elif "Below" in alert_type:
+                    condition = "below"
+                elif "BUY" in alert_type:
+                    condition = "signal_buy"
+                else:
+                    condition = "signal_sell"
+
+                # Determine type
+                if "Price" in alert_type:
+                    a_type = "price"
+                elif "RSI" in alert_type:
+                    a_type = "rsi"
+                    alert_value = 70 if "Above" in alert_type else 30
+                else:
+                    a_type = "signal"
+                    alert_value = 0
+
+                db.add_alert(symbol, alert_market, a_type, condition, alert_value)
+                st.success(f"Alert created for {symbol}")
+                st.rerun()
+
+    with alerts_tab[1]:
+        st.markdown("#### ACTIVE ALERTS")
+        active_alerts = db.get_alerts(active_only=True)
+
+        if active_alerts:
+            for alert in active_alerts:
+                alert_desc = f"{alert['alert_type'].upper()}"
+                if alert['alert_type'] == 'price':
+                    alert_desc = f"Price {alert['condition']} ${alert['value']:.2f}"
+                elif alert['alert_type'] == 'rsi':
+                    alert_desc = f"RSI {alert['condition']} {alert['value']:.0f}"
+                elif alert['alert_type'] == 'signal':
+                    alert_desc = f"Signal changes to {'BUY' if 'buy' in alert['condition'] else 'SELL'}"
+
+                col_al1, col_al2, col_al3, col_al4 = st.columns([2, 3, 2, 1])
+                with col_al1:
+                    st.markdown(f"**{alert['symbol']}**")
+                with col_al2:
+                    st.markdown(alert_desc)
+                with col_al3:
+                    st.caption(f"Created: {alert['created_at'][:10]}")
+                with col_al4:
+                    if st.button("Delete", key=f"del_alert_{alert['id']}"):
+                        db.remove_alert(alert['id'])
+                        st.rerun()
+        else:
+            st.info("No active alerts. Create one above.")
+
+        st.markdown("---")
+        st.markdown("#### TRIGGERED ALERTS")
+        triggered = db.get_triggered_alerts(limit=20)
+        if triggered:
+            for alert in triggered:
+                st.markdown(f"- **{alert['symbol']}** - {alert['alert_type']} alert triggered at {alert['triggered_at'][:16]}")
+        else:
+            st.caption("No triggered alerts yet.")
+
+    with alerts_tab[2]:
+        st.markdown("#### NOTIFICATION SETTINGS")
+
+        st.markdown("**Email Notifications (Gmail)**")
+        email = db.get_setting('email', '')
+        email_input = st.text_input("Gmail Address", value=email, placeholder="your@gmail.com")
+        app_password = st.text_input("App Password", type="password", placeholder="Gmail App Password",
+                                      help="Create an App Password in your Google Account settings")
+
+        if st.button("Save Email Settings"):
+            db.set_setting('email', email_input)
+            if app_password:
+                db.set_setting('email_password', app_password)
+            st.success("Email settings saved!")
+
+        st.markdown("---")
+        st.markdown("**SMS Notifications (Twilio)**")
+        st.caption("Requires a Twilio account (free trial available)")
+
+        twilio_sid = db.get_setting('twilio_sid', '')
+        twilio_token = db.get_setting('twilio_token', '')
+        twilio_from = db.get_setting('twilio_from', '')
+        twilio_to = db.get_setting('twilio_to', '')
+
+        col_tw1, col_tw2 = st.columns(2)
+        with col_tw1:
+            sid_input = st.text_input("Account SID", value=twilio_sid)
+            from_input = st.text_input("Twilio Phone Number", value=twilio_from, placeholder="+1234567890")
+        with col_tw2:
+            token_input = st.text_input("Auth Token", value=twilio_token, type="password")
+            to_input = st.text_input("Your Phone Number", value=twilio_to, placeholder="+1234567890")
+
+        if st.button("Save SMS Settings"):
+            db.set_setting('twilio_sid', sid_input)
+            db.set_setting('twilio_token', token_input)
+            db.set_setting('twilio_from', from_input)
+            db.set_setting('twilio_to', to_input)
+            st.success("SMS settings saved!")
+
+# ===== CALENDAR PAGE =====
+elif mode == "Calendar":
+    st.markdown("### CALENDAR")
+
+    calendar_tab = st.tabs(["Earnings", "Signal History"])
+
+    with calendar_tab[0]:
+        st.markdown("#### EARNINGS CALENDAR")
+
+        # Get earnings from watchlist or input
+        watchlist = db.get_watchlist()
+        watchlist_symbols = [w['symbol'] for w in watchlist]
+
+        if watchlist_symbols:
+            st.markdown("**Earnings for your watchlist:**")
+
+            earnings_data = []
+            for sym in watchlist_symbols:
+                try:
+                    ticker = yf.Ticker(sym)
+                    cal = ticker.calendar
+                    if cal is not None and not cal.empty:
+                        if 'Earnings Date' in cal.columns:
+                            earnings_date = cal['Earnings Date'].iloc[0]
+                            earnings_data.append({
+                                'Symbol': sym,
+                                'Earnings Date': earnings_date.strftime('%Y-%m-%d') if hasattr(earnings_date, 'strftime') else str(earnings_date),
+                                'EPS Estimate': cal.get('EPS Estimate', [None])[0] if 'EPS Estimate' in cal.columns else None
+                            })
+                except:
+                    pass
+
+            if earnings_data:
+                df_earnings = pd.DataFrame(earnings_data)
+                df_earnings = df_earnings.sort_values('Earnings Date')
+                st.dataframe(df_earnings, use_container_width=True)
+            else:
+                st.info("No upcoming earnings found for watchlist symbols.")
+        else:
+            st.info("Add symbols to your watchlist to see their earnings dates.")
+
+        st.markdown("---")
+        st.markdown("**Check specific symbol:**")
+        earn_symbol = st.text_input("Symbol", placeholder="AAPL", key="earn_check")
+        if earn_symbol:
+            try:
+                ticker = yf.Ticker(earn_symbol.upper())
+                cal = ticker.calendar
+                if cal is not None and not cal.empty:
+                    st.dataframe(cal, use_container_width=True)
+                else:
+                    st.info("No earnings data available")
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+    with calendar_tab[1]:
+        st.markdown("#### SIGNAL HISTORY")
+
+        # Accuracy summary
+        accuracy = db.get_signal_accuracy()
+        col_acc1, col_acc2, col_acc3 = st.columns(3)
+        with col_acc1:
+            st.markdown(f"""
+            <div style="background: #1a1f2e; padding: 15px; border-radius: 8px; text-align: center;">
+                <p style="margin: 0; color: #6b7280; font-size: 11px;">BUY ACCURACY</p>
+                <h3 style="margin: 5px 0; color: #10b981;">{accuracy['buy_accuracy']:.1f}%</h3>
+                <p style="margin: 0; color: #6b7280; font-size: 10px;">{accuracy['buy_correct']}/{accuracy['buy_total']} correct</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_acc2:
+            st.markdown(f"""
+            <div style="background: #1a1f2e; padding: 15px; border-radius: 8px; text-align: center;">
+                <p style="margin: 0; color: #6b7280; font-size: 11px;">SELL ACCURACY</p>
+                <h3 style="margin: 5px 0; color: #ef4444;">{accuracy['sell_accuracy']:.1f}%</h3>
+                <p style="margin: 0; color: #6b7280; font-size: 10px;">{accuracy['sell_correct']}/{accuracy['sell_total']} correct</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_acc3:
+            total = accuracy['buy_total'] + accuracy['sell_total']
+            st.markdown(f"""
+            <div style="background: #1a1f2e; padding: 15px; border-radius: 8px; text-align: center;">
+                <p style="margin: 0; color: #6b7280; font-size: 11px;">TOTAL SIGNALS</p>
+                <h3 style="margin: 5px 0; color: #fff;">{total}</h3>
+                <p style="margin: 0; color: #6b7280; font-size: 10px;">tracked</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        # Signal log
+        signals = db.get_signal_history(limit=50)
+        if signals:
+            st.markdown("**Recent Signals:**")
+            for sig in signals:
+                signal_color = "#10b981" if sig['signal'] == "BUY" else "#ef4444" if sig['signal'] == "SELL" else "#f59e0b"
+                result_icon = ""
+                if sig['result'] == 'correct':
+                    result_icon = " ✓"
+                elif sig['result'] == 'incorrect':
+                    result_icon = " ✗"
+
+                col_sig1, col_sig2, col_sig3, col_sig4 = st.columns([2, 2, 2, 2])
+                with col_sig1:
+                    st.markdown(f"**{sig['symbol']}**")
+                with col_sig2:
+                    st.markdown(f"<span style='color: {signal_color}'>{sig['signal']} {sig['score']:.0f}%</span>", unsafe_allow_html=True)
+                with col_sig3:
+                    st.markdown(f"${sig['price']:.2f}")
+                with col_sig4:
+                    st.caption(f"{sig['timestamp'][:10]}{result_icon}")
+        else:
+            st.info("No signals logged yet. Signals are automatically logged when you analyze symbols.")
 
 # Auto-refresh
 if auto_refresh:
