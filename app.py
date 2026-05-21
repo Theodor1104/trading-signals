@@ -426,10 +426,12 @@ def get_stock_info(symbol):
     try:
         ticker = yf.Ticker(symbol)
         info = ticker.info
+        # Try multiple fields for company name
+        name = info.get('shortName') or info.get('longName') or info.get('name') or symbol
         return {
-            'name': info.get('shortName', symbol),
-            'sector': info.get('sector', 'N/A'),
-            'industry': info.get('industry', 'N/A'),
+            'name': name,
+            'sector': info.get('sector', ''),
+            'industry': info.get('industry', ''),
             'market_cap': info.get('marketCap', 0),
             'pe_ratio': info.get('trailingPE', 0),
             'forward_pe': info.get('forwardPE', 0),
@@ -440,7 +442,7 @@ def get_stock_info(symbol):
             'avg_volume': info.get('averageVolume', 0),
         }
     except:
-        return None
+        return {'name': symbol, 'sector': '', 'industry': '', 'market_cap': 0, 'pe_ratio': 0, 'forward_pe': 0, 'dividend_yield': 0, 'beta': 0, '52w_high': 0, '52w_low': 0, 'avg_volume': 0}
 
 # ===== TECHNICAL ANALYSIS =====
 def calculate_indicators(data):
