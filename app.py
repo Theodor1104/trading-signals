@@ -50,6 +50,30 @@ db = JournalDB()
 if not db.get_setting('twilio_to'):
     db.set_setting('twilio_to', '+45 53 89 11 04')
 
+def sync_watchlist_to_github():
+    """Sync watchlist and holdings to watchlist.json for GitHub Actions"""
+    import subprocess
+    try:
+        watchlist = db.get_watchlist()
+        holdings = db.get_holdings()
+
+        data = {
+            "watchlist": [{"symbol": w['symbol'], "market": w['market']} for w in watchlist],
+            "holdings": [{"symbol": h['symbol'], "market": h['market'], "quantity": h['quantity'], "avg_price": h['avg_price']} for h in holdings],
+            "last_updated": datetime.now().isoformat()
+        }
+
+        # Save to JSON
+        with open('watchlist.json', 'w') as f:
+            json.dump(data, f, indent=2)
+
+        # Auto-commit and push to GitHub
+        subprocess.run(['git', 'add', 'watchlist.json'], capture_output=True)
+        subprocess.run(['git', 'commit', '-m', 'Auto-sync watchlist'], capture_output=True)
+        subprocess.run(['git', 'push'], capture_output=True)
+    except Exception as e:
+        pass  # Silent fail - don't break app if git fails
+
 # TradingView Technical Analysis
 try:
     from tradingview_ta import TA_Handler, Interval, Exchange
@@ -1338,6 +1362,7 @@ if mode == "Dashboard":
                         if st.button("+ Watch", key=f"add_{opp['symbol']}"):
                             market_type = "Crypto" if "-USD" in opp['symbol'] else "Stocks"
                             db.add_to_watchlist(opp['symbol'], market_type)
+                            sync_watchlist_to_github()
                             st.rerun()
             else:
                 st.info("Ingen stærke køb signaler fundet lige nu.")
@@ -2278,6 +2303,7 @@ elif mode == "Portfolio":
                         symbol_upper = f"{symbol_upper}-USD"
                     if db.add_to_watchlist(symbol_upper, add_market):
                         st.success(f"Added {symbol_upper}")
+                        sync_watchlist_to_github()
                         st.rerun()
 
         # Display watchlist
@@ -2320,6 +2346,7 @@ elif mode == "Portfolio":
                     with col_w5:
                         if st.button("X", key=f"rm_{item['id']}"):
                             db.remove_from_watchlist(item['symbol'], item['market'])
+                            sync_watchlist_to_github()
                             st.rerun()
                 except Exception as e:
                     col_w1, col_w2 = st.columns([4, 1])
@@ -2328,6 +2355,7 @@ elif mode == "Portfolio":
                     with col_w2:
                         if st.button("X", key=f"rm_{item['id']}"):
                             db.remove_from_watchlist(item['symbol'], item['market'])
+                            sync_watchlist_to_github()
                             st.rerun()
         else:
             st.info("Your watchlist is empty. Add symbols above to get started.")
@@ -2362,6 +2390,7 @@ elif mode == "Portfolio":
                         symbol_upper = f"{symbol_upper}-USD"
                     db.add_holding(symbol_upper, hold_market, hold_qty, hold_price)
                     st.success(f"Added {hold_qty} {symbol_upper}")
+                    sync_watchlist_to_github()
                     st.rerun()
 
         st.markdown("---")
@@ -2454,6 +2483,7 @@ elif mode == "Portfolio":
                 with col_t6:
                     if st.button("Sell", key=f"sell_{h['id']}"):
                         db.remove_holding(h['id'])
+                        sync_watchlist_to_github()
                         st.rerun()
         else:
             st.info("No holdings yet. Add your first position above.")

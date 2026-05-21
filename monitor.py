@@ -23,7 +23,7 @@ try:
     TA_AVAILABLE = True
 except ImportError:
     TA_AVAILABLE = False
-    print("[WARNING] ta library not available")
+    print("[WARNING] ta library not available", flush=True)
 
 # Twilio for SMS
 try:
@@ -31,7 +31,7 @@ try:
     TWILIO_AVAILABLE = True
 except ImportError:
     TWILIO_AVAILABLE = False
-    print("[WARNING] Twilio not installed - SMS disabled")
+    print("[WARNING] Twilio not installed - SMS disabled", flush=True)
 
 # Configuration
 CHECK_INTERVAL_MINUTES = 30  # Check every 30 minutes
@@ -43,7 +43,7 @@ last_signals = {}
 def log(message):
     """Print with timestamp"""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{timestamp}] {message}")
+    print(f"[{timestamp}] {message}", flush=True)
 
 def is_market_open():
     """Check if US market is open (rough check)"""
