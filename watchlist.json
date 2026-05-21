@@ -1,5 +1,10 @@
 {
-  "watchlist": [],
+  "watchlist": [
+    {
+      "symbol": "RENDER-USD",
+      "market": "Crypto"
+    }
+  ],
   "holdings": [],
-  "last_updated": ""
+  "last_updated": "2026-05-21T23:46:52.396220"
 }
