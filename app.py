@@ -1251,7 +1251,7 @@ if mode == "Dashboard":
 
     with col_main:
         # Auto-scan button
-        if st.button("🔄 SCAN FOR OPPORTUNITIES", type="primary", use_container_width=True):
+        if st.button("SCAN FOR OPPORTUNITIES", type="primary", use_container_width=True):
             st.session_state['dashboard_scanned'] = True
 
         if st.session_state.get('dashboard_scanned', False) or True:
@@ -1261,14 +1261,14 @@ if mode == "Dashboard":
                 top_crypto = auto_scan_opportunities(CRYPTO_SYMBOLS)
 
             # TOP BUY OPPORTUNITIES
-            st.markdown("#### 🚀 TOP KØB MULIGHEDER")
+            st.markdown("#### TOP BUY SIGNALS")
             buy_opps = [r for r in top_stocks + top_crypto if r['signal'] == 'BUY' and r['score'] >= 60]
             buy_opps = sorted(buy_opps, key=lambda x: x['score'], reverse=True)[:5]
 
             if buy_opps:
                 for opp in buy_opps:
                     score_color = "#10b981" if opp['score'] >= 70 else "#f59e0b"
-                    conf_badge = "🔥" if opp['confidence'] == 'VERY HIGH' else "⭐" if opp['confidence'] == 'HIGH' else ""
+                    conf_badge = "[HOT]" if opp['confidence'] == 'VERY HIGH' else "[+]" if opp['confidence'] == 'HIGH' else ""
 
                     col_o1, col_o2, col_o3, col_o4, col_o5 = st.columns([2, 2, 1.5, 2, 1.5])
                     with col_o1:
@@ -1291,7 +1291,7 @@ if mode == "Dashboard":
             st.markdown("---")
 
             # TOP SELL SIGNALS (for watchlist)
-            st.markdown("#### ⚠️ SÆLG SIGNALER (Fra Watchlist)")
+            st.markdown("#### SELL SIGNALS (Watchlist)")
             watchlist_symbols = [w['symbol'] for w in watchlist]
             if watchlist_symbols:
                 watchlist_scan = auto_scan_opportunities(watchlist_symbols, limit=20)
@@ -1309,36 +1309,36 @@ if mode == "Dashboard":
                         with col_s4:
                             st.markdown(f"RSI: {sig['rsi']:.0f}")
                 else:
-                    st.success("✓ Ingen sælg signaler i din watchlist")
+                    st.success("OK - Ingen sælg signaler i din watchlist")
             else:
                 st.caption("Tilføj aktier til watchlist for at få sælg alerts")
 
             st.markdown("---")
 
             # QUICK ACTIONS
-            st.markdown("#### ⚡ HURTIGE HANDLINGER")
+            st.markdown("#### QUICK ACTIONS")
             col_act1, col_act2, col_act3, col_act4 = st.columns(4)
             with col_act1:
-                if st.button("📊 Fuld Scan", use_container_width=True):
+                if st.button("Full Scan", use_container_width=True):
                     st.session_state['go_to'] = 'Scanner'
                     st.rerun()
             with col_act2:
-                if st.button("💼 Portfolio", use_container_width=True):
+                if st.button("Portfolio", use_container_width=True):
                     st.session_state['go_to'] = 'Portfolio'
                     st.rerun()
             with col_act3:
-                if st.button("🔔 Alerts", use_container_width=True):
+                if st.button("Alerts", use_container_width=True):
                     st.session_state['go_to'] = 'Alerts'
                     st.rerun()
             with col_act4:
-                if st.button("📈 Backtest", use_container_width=True):
+                if st.button("Backtest", use_container_width=True):
                     st.session_state['go_to'] = 'Tools'
                     st.rerun()
 
             # TODAY'S MOVERS from watchlist
             if watchlist_symbols:
                 st.markdown("---")
-                st.markdown("#### 📈 DIN WATCHLIST I DAG")
+                st.markdown("#### WATCHLIST TODAY")
                 watchlist_data = auto_scan_opportunities(watchlist_symbols, limit=20)
                 if watchlist_data:
                     for item in watchlist_data[:8]:
@@ -2907,9 +2907,9 @@ elif mode == "Calendar":
                 signal_color = "#10b981" if sig['signal'] == "BUY" else "#ef4444" if sig['signal'] == "SELL" else "#f59e0b"
                 result_icon = ""
                 if sig['result'] == 'correct':
-                    result_icon = " ✓"
+                    result_icon = " [OK]"
                 elif sig['result'] == 'incorrect':
-                    result_icon = " ✗"
+                    result_icon = " [X]"
 
                 col_sig1, col_sig2, col_sig3, col_sig4 = st.columns([2, 2, 2, 2])
                 with col_sig1:
