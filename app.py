@@ -94,6 +94,9 @@ def get_currency(symbol):
 
 def format_price(price, symbol):
     """Format price with correct currency"""
+    import math
+    if price is None or (isinstance(price, float) and math.isnan(price)):
+        return "-"
     currency = get_currency(symbol)
     if currency == 'kr':
         return f"{price:,.2f} kr"
