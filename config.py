@@ -23,7 +23,7 @@ DATA_DIR.mkdir(exist_ok=True)
 
 TECH_STOCKS = [
     # Mega Cap Tech
-    "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "META", "NVDA", "TSLA",
+    "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "META", "NVDA", "TSLA", "CRWV",
     # Semiconductors
     "AMD", "INTC", "QCOM", "AVGO", "TXN", "MU", "MRVL", "LRCX", "KLAC", "AMAT",
     "ASML", "TSM", "NXPI", "ON", "ADI", "MCHP", "SWKS", "QRVO",
@@ -361,4 +361,5 @@ COMPANY_NAMES = {
     # Added
     "HH.CO": "H+H International",
     "RR.L": "Rolls-Royce Holdings PLC",
+    "CRWV": "COREwave Inc.",
 }
