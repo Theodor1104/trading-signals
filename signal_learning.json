@@ -1,0 +1,59 @@
+{
+  "weights": {
+    "RSI_OVERSOLD": 1.0,
+    "RSI_RECOVERY": 1.0,
+    "MACD_CROSS": 1.0,
+    "MACD_MOMENTUM": 1.0,
+    "STOCH_CROSS": 1.0,
+    "EMA_CROSS": 1.0,
+    "TREND_ABOVE_MA": 1.0,
+    "GOLDEN_CROSS": 1.0,
+    "ADX_BULLISH": 1.0,
+    "SUPPORT_BOUNCE": 1.0,
+    "HAMMER": 1.0,
+    "ENGULFING": 1.0,
+    "MORNING_STAR": 1.0,
+    "THREE_SOLDIERS": 1.0,
+    "VOLUME_BREAKOUT": 1.0,
+    "RELATIVE_STRENGTH": 1.0,
+    "WILLIAMS_R": 1.0,
+    "CCI_OVERSOLD": 1.0
+  },
+  "signals": [
+    {
+      "id": "SEI-USD_20260527_235050",
+      "symbol": "SEI-USD",
+      "signal": "BUY",
+      "score": 75.82575000000001,
+      "indicators": [
+        "MACD_MOMENTUM",
+        "TREND_ABOVE_MA",
+        "MACD_CROSS",
+        "EMA_CROSS",
+        "SUPPORT_BOUNCE",
+        "THREE_SOLDIERS",
+        "VOLUME_BREAKOUT"
+      ],
+      "price_at_signal": 0.06699000298976898,
+      "reasons": [
+        "RSI neutral bullish (58)",
+        "MACD momentum accelerating",
+        "Strong trend: above 5/5 MAs",
+        "5d momentum +10.4%",
+        "MACD bullish cross (1d ago)"
+      ],
+      "timestamp": "2026-05-27T23:50:50.628170",
+      "outcomes": {
+        "1d": null,
+        "5d": null,
+        "10d": null,
+        "20d": null
+      },
+      "checked": false
+    }
+  ],
+  "indicator_stats": {},
+  "last_updated": "2026-05-27T23:50:53.214646",
+  "total_signals": 1,
+  "version": "3.0"
+}

@@ -43,6 +43,18 @@ try:
 except ImportError:
     TWILIO_AVAILABLE = False
 
+# Import smart scoring from golden_scanner
+try:
+    from golden_scanner import (
+        calculate_smart_score as smart_score,
+        calculate_indicators as smart_indicators,
+        fetch_market_data as fetch_spy_data,
+        learning
+    )
+    SMART_SCORING_AVAILABLE = True
+except ImportError:
+    SMART_SCORING_AVAILABLE = False
+
 # Initialize database
 db = JournalDB()
 
@@ -1235,31 +1247,83 @@ if mode == "Dashboard":
     # Auto-scan function for dashboard
     @st.cache_data(ttl=300)
     def auto_scan_opportunities(symbols, limit=10):
-        """Automatically scan for best opportunities"""
+        """Automatically scan for best opportunities using SMART scoring"""
         results = []
-        for sym in symbols[:50]:  # Limit for speed
-            try:
-                data = fetch_stock_data(sym, period="3mo")
-                if data is None or len(data) < 20:
-                    continue
-                data = calculate_indicators(data)
-                conf = calculate_confluence(data, None, 0, None, None)
-                latest = data.iloc[-1]
-                prev = data.iloc[-2]
-                price = latest['close']
-                change = ((price / prev['close']) - 1) * 100
 
-                results.append({
-                    'symbol': sym,
-                    'price': price,
-                    'change': change,
-                    'signal': conf['signal'],
-                    'score': conf['score'],
-                    'rsi': latest.get('rsi', 50),
-                    'confidence': conf.get('confidence', 'MODERATE')
-                })
-            except:
-                continue
+        # Use smart scoring if available
+        if SMART_SCORING_AVAILABLE:
+            # Get SPY data once for relative strength
+            spy_data = fetch_spy_data() if 'spy_cache' not in st.session_state else st.session_state.get('spy_cache')
+            if spy_data is not None:
+                st.session_state['spy_cache'] = spy_data
+
+            for sym in symbols[:50]:  # Limit for speed
+                try:
+                    # Fetch data with yfinance directly for smart scoring
+                    ticker = yf.Ticker(sym)
+                    data = ticker.history(period="6mo")
+                    if data is None or len(data) < 50:
+                        continue
+
+                    # Use smart indicators and scoring
+                    data = smart_indicators(data)
+                    score, reasons, signal, indicators = smart_score(data, spy_data)
+
+                    price = data['Close'].iloc[-1]
+                    prev_price = data['Close'].iloc[-2]
+                    change = ((price / prev_price) - 1) * 100
+
+                    # Calculate RSI for display
+                    rsi = data['RSI'].iloc[-1] if 'RSI' in data.columns else 50
+
+                    # Determine confidence based on score
+                    if score >= 85:
+                        confidence = 'VERY HIGH'
+                    elif score >= 70:
+                        confidence = 'HIGH'
+                    elif score >= 55:
+                        confidence = 'MODERATE'
+                    else:
+                        confidence = 'LOW'
+
+                    results.append({
+                        'symbol': sym,
+                        'price': price,
+                        'change': change,
+                        'signal': signal.replace('STRONG ', ''),  # BUY, SELL, WATCH, NEUTRAL
+                        'score': score,
+                        'rsi': rsi,
+                        'confidence': confidence,
+                        'reasons': reasons[:3]
+                    })
+                except:
+                    continue
+        else:
+            # Fallback to old scoring if smart scoring not available
+            for sym in symbols[:50]:
+                try:
+                    data = fetch_stock_data(sym, period="3mo")
+                    if data is None or len(data) < 20:
+                        continue
+                    data = calculate_indicators(data)
+                    conf = calculate_confluence(data, None, 0, None, None)
+                    latest = data.iloc[-1]
+                    prev = data.iloc[-2]
+                    price = latest['close']
+                    change = ((price / prev['close']) - 1) * 100
+
+                    results.append({
+                        'symbol': sym,
+                        'price': price,
+                        'change': change,
+                        'signal': conf['signal'],
+                        'score': conf['score'],
+                        'rsi': latest.get('rsi', 50),
+                        'confidence': conf.get('confidence', 'MODERATE')
+                    })
+                except:
+                    continue
+
         return sorted(results, key=lambda x: x['score'], reverse=True)[:limit]
 
     # Dashboard layout
@@ -1325,109 +1389,117 @@ if mode == "Dashboard":
     with col_main:
         # Auto-scan button
         if st.button("SCAN FOR OPPORTUNITIES", type="primary", use_container_width=True):
-            st.session_state['dashboard_scanned'] = True
+            st.session_state['dashboard_needs_scan'] = True
 
-        if st.session_state.get('dashboard_scanned', False) or True:
+        # Run scan if needed or on first load
+        if st.session_state.get('dashboard_needs_scan', True):
             with st.spinner("Scanner markeder for de bedste muligheder..."):
-                # Scan stocks
                 top_stocks = auto_scan_opportunities(ALL_STOCKS[:100])
                 top_crypto = auto_scan_opportunities(CRYPTO_SYMBOLS)
+                # Cache results in session state
+                st.session_state['dashboard_stocks'] = top_stocks
+                st.session_state['dashboard_crypto'] = top_crypto
+                st.session_state['dashboard_needs_scan'] = False
 
-            # TOP BUY OPPORTUNITIES
-            st.markdown("#### TOP BUY SIGNALS")
-            buy_opps = [r for r in top_stocks + top_crypto if r['signal'] == 'BUY' and r['score'] >= 60]
-            buy_opps = sorted(buy_opps, key=lambda x: x['score'], reverse=True)[:5]
+        # Use cached results
+        top_stocks = st.session_state.get('dashboard_stocks', [])
+        top_crypto = st.session_state.get('dashboard_crypto', [])
 
-            if buy_opps:
-                for opp in buy_opps:
-                    score_color = "#10b981" if opp['score'] >= 70 else "#f59e0b"
-                    conf_badge = "[HOT]" if opp['confidence'] == 'VERY HIGH' else "[+]" if opp['confidence'] == 'HIGH' else ""
+        # TOP BUY OPPORTUNITIES
+        st.markdown("#### TOP BUY SIGNALS")
+        buy_opps = [r for r in top_stocks + top_crypto if r['signal'] == 'BUY' and r['score'] >= 60]
+        buy_opps = sorted(buy_opps, key=lambda x: x['score'], reverse=True)[:5]
 
-                    col_o1, col_o2, col_o3, col_o4, col_o5 = st.columns([2, 2, 1.5, 2, 1.5])
-                    with col_o1:
-                        st.markdown(f"**{opp['symbol']}** {conf_badge}")
-                    with col_o2:
-                        st.markdown(format_price(opp['price'], opp['symbol']))
-                    with col_o3:
-                        chg_color = "#10b981" if opp['change'] >= 0 else "#ef4444"
-                        st.markdown(f"<span style='color:{chg_color}'>{opp['change']:+.1f}%</span>", unsafe_allow_html=True)
-                    with col_o4:
-                        st.markdown(f"<span style='color:{score_color}'>BUY {opp['score']:.0f}%</span>", unsafe_allow_html=True)
-                    with col_o5:
-                        if st.button("+ Watch", key=f"add_{opp['symbol']}"):
-                            market_type = "Crypto" if "-USD" in opp['symbol'] else "Stocks"
-                            db.add_to_watchlist(opp['symbol'], market_type)
-                            sync_watchlist_to_github()
-                            st.rerun()
+        if buy_opps:
+            for opp in buy_opps:
+                score_color = "#10b981" if opp['score'] >= 70 else "#f59e0b"
+                conf_badge = "[HOT]" if opp['confidence'] == 'VERY HIGH' else "[+]" if opp['confidence'] == 'HIGH' else ""
+
+                col_o1, col_o2, col_o3, col_o4, col_o5 = st.columns([2, 2, 1.5, 2, 1.5])
+                with col_o1:
+                    st.markdown(f"**{opp['symbol']}** {conf_badge}")
+                with col_o2:
+                    st.markdown(format_price(opp['price'], opp['symbol']))
+                with col_o3:
+                    chg_color = "#10b981" if opp['change'] >= 0 else "#ef4444"
+                    st.markdown(f"<span style='color:{chg_color}'>{opp['change']:+.1f}%</span>", unsafe_allow_html=True)
+                with col_o4:
+                    st.markdown(f"<span style='color:{score_color}'>BUY {opp['score']:.0f}%</span>", unsafe_allow_html=True)
+                with col_o5:
+                    if st.button("+ Watch", key=f"add_{opp['symbol']}"):
+                        market_type = "Crypto" if "-USD" in opp['symbol'] else "Stocks"
+                        db.add_to_watchlist(opp['symbol'], market_type)
+                        sync_watchlist_to_github()
+                        st.rerun()
+        else:
+            st.info("Ingen stærke køb signaler fundet lige nu.")
+
+        st.markdown("---")
+
+        # TOP SELL SIGNALS (for watchlist)
+        st.markdown("#### SELL SIGNALS (Watchlist)")
+        watchlist_symbols = [w['symbol'] for w in watchlist]
+        if watchlist_symbols:
+            watchlist_scan = auto_scan_opportunities(watchlist_symbols, limit=20)
+            sell_signals = [r for r in watchlist_scan if r['signal'] == 'SELL']
+
+            if sell_signals:
+                for sig in sell_signals[:5]:
+                    col_s1, col_s2, col_s3, col_s4 = st.columns([2, 2, 2, 2])
+                    with col_s1:
+                        st.markdown(f"**{sig['symbol']}**")
+                    with col_s2:
+                        st.markdown(format_price(sig['price'], sig['symbol']))
+                    with col_s3:
+                        st.markdown(f"<span style='color:#ef4444'>SELL {sig['score']:.0f}%</span>", unsafe_allow_html=True)
+                    with col_s4:
+                        st.markdown(f"RSI: {sig['rsi']:.0f}")
             else:
-                st.info("Ingen stærke køb signaler fundet lige nu.")
+                st.success("OK - Ingen sælg signaler i din watchlist")
+        else:
+            st.caption("Tilføj aktier til watchlist for at få sælg alerts")
 
+        st.markdown("---")
+
+        # QUICK ACTIONS
+        st.markdown("#### QUICK ACTIONS")
+        col_act1, col_act2, col_act3, col_act4 = st.columns(4)
+        with col_act1:
+            if st.button("Full Scan", use_container_width=True):
+                st.session_state['go_to'] = 'Scanner'
+                st.rerun()
+        with col_act2:
+            if st.button("Portfolio", use_container_width=True):
+                st.session_state['go_to'] = 'Portfolio'
+                st.rerun()
+        with col_act3:
+            if st.button("Alerts", use_container_width=True):
+                st.session_state['go_to'] = 'Alerts'
+                st.rerun()
+        with col_act4:
+            if st.button("Backtest", use_container_width=True):
+                st.session_state['go_to'] = 'Tools'
+                st.rerun()
+
+        # TODAY'S MOVERS from watchlist
+        if watchlist_symbols:
             st.markdown("---")
+            st.markdown("#### WATCHLIST TODAY")
+            watchlist_data = auto_scan_opportunities(watchlist_symbols, limit=20)
+            if watchlist_data:
+                for item in watchlist_data[:8]:
+                    signal_color = "#10b981" if item['signal'] == "BUY" else "#ef4444" if item['signal'] == "SELL" else "#f59e0b"
+                    chg_color = "#10b981" if item['change'] >= 0 else "#ef4444"
 
-            # TOP SELL SIGNALS (for watchlist)
-            st.markdown("#### SELL SIGNALS (Watchlist)")
-            watchlist_symbols = [w['symbol'] for w in watchlist]
-            if watchlist_symbols:
-                watchlist_scan = auto_scan_opportunities(watchlist_symbols, limit=20)
-                sell_signals = [r for r in watchlist_scan if r['signal'] == 'SELL']
-
-                if sell_signals:
-                    for sig in sell_signals[:5]:
-                        col_s1, col_s2, col_s3, col_s4 = st.columns([2, 2, 2, 2])
-                        with col_s1:
-                            st.markdown(f"**{sig['symbol']}**")
-                        with col_s2:
-                            st.markdown(format_price(sig['price'], sig['symbol']))
-                        with col_s3:
-                            st.markdown(f"<span style='color:#ef4444'>SELL {sig['score']:.0f}%</span>", unsafe_allow_html=True)
-                        with col_s4:
-                            st.markdown(f"RSI: {sig['rsi']:.0f}")
-                else:
-                    st.success("OK - Ingen sælg signaler i din watchlist")
-            else:
-                st.caption("Tilføj aktier til watchlist for at få sælg alerts")
-
-            st.markdown("---")
-
-            # QUICK ACTIONS
-            st.markdown("#### QUICK ACTIONS")
-            col_act1, col_act2, col_act3, col_act4 = st.columns(4)
-            with col_act1:
-                if st.button("Full Scan", use_container_width=True):
-                    st.session_state['go_to'] = 'Scanner'
-                    st.rerun()
-            with col_act2:
-                if st.button("Portfolio", use_container_width=True):
-                    st.session_state['go_to'] = 'Portfolio'
-                    st.rerun()
-            with col_act3:
-                if st.button("Alerts", use_container_width=True):
-                    st.session_state['go_to'] = 'Alerts'
-                    st.rerun()
-            with col_act4:
-                if st.button("Backtest", use_container_width=True):
-                    st.session_state['go_to'] = 'Tools'
-                    st.rerun()
-
-            # TODAY'S MOVERS from watchlist
-            if watchlist_symbols:
-                st.markdown("---")
-                st.markdown("#### WATCHLIST TODAY")
-                watchlist_data = auto_scan_opportunities(watchlist_symbols, limit=20)
-                if watchlist_data:
-                    for item in watchlist_data[:8]:
-                        signal_color = "#10b981" if item['signal'] == "BUY" else "#ef4444" if item['signal'] == "SELL" else "#f59e0b"
-                        chg_color = "#10b981" if item['change'] >= 0 else "#ef4444"
-
-                        col_w1, col_w2, col_w3, col_w4 = st.columns([2, 2, 2, 2])
-                        with col_w1:
-                            st.markdown(f"**{item['symbol']}**")
-                        with col_w2:
-                            st.markdown(format_price(item['price'], item['symbol']))
-                        with col_w3:
-                            st.markdown(f"<span style='color:{chg_color}'>{item['change']:+.2f}%</span>", unsafe_allow_html=True)
-                        with col_w4:
-                            st.markdown(f"<span style='color:{signal_color}'>{item['signal']} {item['score']:.0f}%</span>", unsafe_allow_html=True)
+                    col_w1, col_w2, col_w3, col_w4 = st.columns([2, 2, 2, 2])
+                    with col_w1:
+                        st.markdown(f"**{item['symbol']}**")
+                    with col_w2:
+                        st.markdown(format_price(item['price'], item['symbol']))
+                    with col_w3:
+                        st.markdown(f"<span style='color:{chg_color}'>{item['change']:+.2f}%</span>", unsafe_allow_html=True)
+                    with col_w4:
+                        st.markdown(f"<span style='color:{signal_color}'>{item['signal']} {item['score']:.0f}%</span>", unsafe_allow_html=True)
 
 elif mode == "Analysis":
 
