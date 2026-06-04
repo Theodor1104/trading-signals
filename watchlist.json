@@ -1,11 +1,7 @@
 {
   "watchlist": [
     {
-      "symbol": "SEI-USD",
-      "market": "Crypto"
-    },
-    {
-      "symbol": "RR.L",
+      "symbol": "NOW",
       "market": "Stocks"
     },
     {
@@ -18,5 +14,5 @@
     }
   ],
   "holdings": [],
-  "last_updated": "2026-05-28T00:00:00.000000"
+  "last_updated": "2026-06-01T13:47:19.983706"
 }
