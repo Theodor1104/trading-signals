@@ -295,7 +295,7 @@ learning = LearningSystem()
 # Stocks to scan - 200+ stocks across all major sectors
 SCAN_STOCKS = [
     # ===== US MEGA CAP TECH =====
-    "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "META", "TSLA", "AVGO", "ORCL",
+    "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "META", "TSLA", "AVGO", "ORCL", "SPCX",
 
     # ===== US LARGE CAP TECH =====
     "AMD", "NFLX", "CRM", "ADBE", "INTC", "CSCO", "QCOM", "TXN", "IBM", "NOW",
